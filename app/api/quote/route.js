@@ -1,0 +1,4 @@
+import {NextResponse} from 'next/server';
+// Production: parse the description with your AI provider, then call authorised supplier connectors.
+// Never expose supplier/API credentials to the browser. Never label web-scraped/unverified prices as exact/live.
+export async function POST(req){const body=await req.json();const q=Math.max(1,Number(body.quantity)||1);const demo=[{product:`Matched material for ${body.trade}`,supplier:'Supplier connector required',sku:'DEMO-001',unitPrice:42.5,qty:q,matchStatus:'Demo match — verify before quoting'}].map(x=>({...x,total:x.unitPrice*x.qty}));return NextResponse.json({mode:'demo',items:demo,materialsTotal:demo.reduce((s,x)=>s+x.total,0),message:'Demo data only. Add authorised supplier connectors and AI credentials on the server to enable verified live matching.'})}
