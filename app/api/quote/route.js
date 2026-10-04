@@ -14,6 +14,7 @@ function cleanItem(item, index) {
     matchStatus: String(item?.specification || item?.notes || 'Material identified by AI — product/SKU still needs supplier matching'),
     category: String(item?.category || ''),
     unit: String(item?.unit || 'each'),
+    searchQuery: String(item?.searchQuery || item?.material || ''),
     needsConfirmation: Boolean(item?.needsConfirmation),
   };
 }
@@ -52,6 +53,18 @@ IMPORTANT PRODUCT MATCHING RULES:
 - When multiple suitable products could satisfy the request, create the generic material item and allow the supplier/product matching stage to present the available varieties later.
 - Include normal installation consumables or associated materials when they would reasonably be required for the job.
 
+SEARCH QUERY RULES:
+For every material, create a searchQuery that can later be used to find real products from Australian suppliers.
+The searchQuery should describe the product being searched for, not a made-up brand or model.
+Include any size, dimensions, material, colour, finish, rating or other specification the user actually provided.
+If the user did not specify a brand, model, colour, finish or style, do not invent one and do not include one in searchQuery.
+Keep searchQuery broad enough to return multiple suitable product varieties for the user to choose from.
+Examples:
+"5 internal doors" -> searchQuery: "internal door"
+"5 x 820 x 2040 x 35mm internal doors" -> searchQuery: "820 x 2040 x 35mm internal door"
+"20mm copper pipe" -> searchQuery: "20mm copper pipe"
+"double power points" -> searchQuery: "double power point"
+
 Return JSON only, matching the supplied schema.`;
 const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
@@ -85,16 +98,18 @@ async function callGemini(model = MODEL) {
                       category: { type: 'string' },
                       quantity: { type: 'number' },
                       unit: { type: 'string' },
+                      searchQuery: { type: 'string' },
                       specification: { type: 'string' },
                       needsConfirmation: { type: 'boolean' }
                     },
                     required: [
-                      'material',
-                      'quantity',
-                      'unit',
-                      'specification',
-                      'needsConfirmation'
-                    ]
+  'material',
+  'quantity',
+  'unit',
+  'specification',
+  'searchQuery',
+  'needsConfirmation'
+]
                   }
                 },
                 questions: {
