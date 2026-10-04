@@ -1,7 +1,7 @@
 import {NextResponse} from 'next/server';
 
 const MODEL = process.env.GEMINI_MODEL || 'gemini-3.8-flash';
-
+const FALLBACK_MODEL = 'gemini-3.5-flash-lite';
 function cleanItem(item, index) {
   const qty = Math.max(0, Number(item?.quantity) || 0);
   return {
@@ -43,12 +43,12 @@ Create a practical material take-off for this job. Use Australian trade terminol
 Return JSON only, matching the supplied schema.`;
 const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
-async function callGemini() {
+async function callGemini(model = MODEL) {
   let lastResponse;
 
   for (let attempt = 1; attempt <= 3; attempt++) {
     lastResponse = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(MODEL)}:generateContent`,
+      `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent`,
       {
         method: 'POST',
         headers: {
@@ -108,7 +108,12 @@ async function callGemini() {
     }
   }
 
-  return lastResponse;
+  if (model === MODEL && FALLBACK_MODEL) {
+  console.log(`Primary Gemini model unavailable - trying fallback ${FALLBACK_MODEL}`);
+  return callGemini(FALLBACK_MODEL);
+}
+
+return lastResponse;
 }
 
 const response = await callGemini();
