@@ -30,11 +30,49 @@ const money = n =>
     currency: 'AUD'
   }).format(Number(n) || 0);
 
+const tradeHelp = {
+  'Carpentry': 'Describe the carpentry work. Include quantities, dimensions, door or window sizes, timber sizes and lengths, sheet materials, hardware and any materials you already know are required.',
+
+  'Plastering': 'Describe the plastering work. Include wall or ceiling dimensions, sheet type or thickness, number of rooms or areas, cornice and any other materials you know are required.',
+
+  'Decking': 'Describe the deck work. Include length and width, height, decking material if known, board sizes, stairs, handrails and any framing details you know.',
+
+  'Painting': 'Describe what needs painting. Include room or area dimensions, walls, ceilings or exterior areas, surface type, number of coats and paint type if known.',
+
+  'Tiling': 'Describe the tiling work. Include floor or wall dimensions, tile size and type if known, waterproofing, grout, adhesive and trims where required.',
+
+  'Flooring': 'Describe the flooring work. Include room or floor dimensions, flooring type, board or plank size if known, underlay, trims and any floor preparation required.',
+
+  'Fencing': 'Describe the fencing work. Include total length, fence height, material or fence type, gates, sleepers and any other requirements.',
+
+  'Roofing': 'Describe the roofing work. Include roof dimensions or area, roofing material, sheets or tiles, flashings, gutters, downpipes and insulation where required.',
+
+  'Bricklaying & Masonry': 'Describe the brick or masonry work. Include wall length and height, brick or block type and size if known, openings, piers, lintels and reinforcement.',
+
+  'Concreting': 'Describe the concreting work. Include length, width and thickness, concrete type or strength if known, reinforcement, formwork and required finish.',
+
+  'Landscaping': 'Describe the landscaping work. Include area dimensions, soil or mulch depths, turf, plants, edging, retaining walls, drainage and paving where required.',
+
+  'Plumbing': 'Describe the plumbing work. Include pipe type and size, approximate lengths, fittings, fixtures, connection sizes, valves, wastes and quantities where known.',
+
+  'Electrical': 'Describe the electrical work. Include quantities of power points, switches, lights or circuits, cable requirements, sizes or ratings and any specific products where known.',
+
+  'Cabinetry & Joinery': 'Describe the cabinetry or joinery work. Include cabinet dimensions and quantities, sheet material, doors, drawers, benchtops, hinges, handles and hardware.',
+
+  'Windows & Doors': 'Describe the window or door work. Include quantities, dimensions, internal or external use, handles, locks, hinges, stops and any materials you know are required.',
+
+  'Demolition': 'Describe what needs to be removed. Include dimensions or quantities, material types, fixtures being removed and any disposal requirements.',
+
+  'General Handyman': 'Describe the work being completed. Include quantities, dimensions, materials, replacement parts, fixings and anything else you know is required.',
+
+  'Other / General materials': 'Describe the work in detail. Include quantities, measurements, sizes, material types, fittings, fixings and any products you already know are required.'
+};
+
 export default function Home() {
   const [trade, setTrade] = useState('Carpentry');
   const [desc, setDesc] = useState('');
   const [qty, setQty] = useState(5);
-  const [suburb, setSuburb] = useState('Campbelltown NSW');
+  const [suburb, setSuburb] = useState('Suburb');
 
   const [labType, setLabType] = useState('hourly');
   const [rate, setRate] = useState(85);
@@ -201,7 +239,7 @@ export default function Home() {
                   rows="5"
                   value={desc}
                   onChange={e => setDesc(e.target.value)}
-                  placeholder="Example: Install 5 internal doors with 5 new passage handles and 3 hinges per door."
+                  placeholder={tradeHelp[trade]}
                 />
               </label>
 
