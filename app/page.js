@@ -86,123 +86,589 @@ const tradeHelp = {
     'Describe the work in detail. Include quantities, measurements, sizes, material types, fittings, fixings and any products you already know are required.'
 };
 
-function supplierSearches(searchQuery) {
-  const q = encodeURIComponent(searchQuery || '');
-
-  return [
-    {
-      name: 'Bunnings',
-      url: `https://www.bunnings.com.au/search/products?q=${q}`
-    },
-    {
-      name: 'Mitre 10',
-      url: `https://www.mitre10.com.au/?q=${q}`
-    },
-    {
-      name: 'Bowens',
-      url: `https://www.bowens.com.au/search/?page=1&query=${q}`
-    },
-    {
-      name: 'Reece',
-      url: `https://www.reece.com.au/search/index.html?q=${q}`
-    }
-  ];
-}
-
-function ProductFinder({ item }) {
+function ProductFinder({
+  item,
+  suburb,
+  selected,
+  onSelect
+}) {
   const [open, setOpen] = useState(false);
+  const [searched, setSearched] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [products, setProducts] = useState([]);
+  const [error, setError] = useState('');
 
-  const query = item.searchQuery || item.product || '';
+  const query =
+    item.searchQuery ||
+    item.product ||
+    '';
+
+  async function findProducts() {
+    setOpen(true);
+    setLoading(true);
+    setError('');
+    setProducts([]);
+    setSearched(true);
+
+    try {
+      const response = await fetch(
+        '/api/products',
+        {
+          method: 'POST',
+
+          headers: {
+            'content-type':
+              'application/json'
+          },
+
+          body: JSON.stringify({
+            query,
+            suburb
+          })
+        }
+      );
+
+      const data =
+        await response.json();
+
+      if (!response.ok) {
+        throw new Error(
+          data.error ||
+            'Could not search supplier products.'
+        );
+      }
+
+      setProducts(
+        Array.isArray(data.products)
+          ? data.products
+          : []
+      );
+    } catch (err) {
+      setError(
+        err.message ||
+          'Could not search supplier products.'
+      );
+    } finally {
+      setLoading(false);
+    }
+  }
 
   return (
     <div style={{ marginTop: 12 }}>
-      <button
-        type="button"
-        className="btn"
-        style={{ width: '100%' }}
-        onClick={() => setOpen(v => !v)}
-      >
-        {open ? 'Hide Product Options' : 'Find Product Options'}
-      </button>
+      {!open ? (
+        <button
+          type="button"
+          className="btn"
+          style={{ width: '100%' }}
+          onClick={findProducts}
+        >
+          🔎 Find Product Options
+        </button>
+      ) : (
+        <>
+          <div
+            style={{
+              display: 'flex',
+              gap: 8
+            }}
+          >
+            <button
+              type="button"
+              className="btn"
+              style={{ flex: 1 }}
+              onClick={findProducts}
+              disabled={loading}
+            >
+              {loading
+                ? 'Searching suppliers…'
+                : 'Search Again'}
+            </button>
 
-      {open && (
-        <div className="hint" style={{ marginTop: 10 }}>
-          <b>Search supplier catalogues</b>
-
-          <div style={{ marginTop: 5 }}>
-            Search term: <b>{query}</b>
+            <button
+              type="button"
+              className="btn"
+              onClick={() =>
+                setOpen(false)
+              }
+            >
+              Hide
+            </button>
           </div>
 
           <div
+            className="hint"
             style={{
-              display: 'grid',
-              gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
-              gap: 8,
               marginTop: 10
             }}
           >
-            {supplierSearches(query).map(supplier => (
-              <a
-                key={supplier.name}
-                href={supplier.url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="btn"
-                style={{
-                  textAlign: 'center',
-                  textDecoration: 'none',
-                  display: 'block'
-                }}
-              >
-                Search {supplier.name}
-              </a>
-            ))}
+            Searching for:{' '}
+            <b>{query}</b>
+
+            {suburb && (
+              <>
+                <br />
+                Job location:{' '}
+                <b>{suburb}</b>
+              </>
+            )}
           </div>
 
-          <div style={{ marginTop: 10, fontSize: 12 }}>
-            Supplier pages open directly so you can check the matching product,
-            current web price and availability. Website prices are not treated
-            as live trade-account pricing.
-          </div>
-        </div>
+          {loading && (
+            <div
+              className="hint"
+              style={{
+                marginTop: 10,
+                textAlign: 'center',
+                padding: 18
+              }}
+            >
+              <b>
+                🔎 Searching Bunnings,
+                Mitre 10, Bowens and
+                Reece…
+              </b>
+
+              <br />
+
+              <span
+                style={{
+                  fontSize: 12
+                }}
+              >
+                Checking current public
+                web products and prices.
+              </span>
+            </div>
+          )}
+
+          {error && (
+            <div
+              className="warning"
+              style={{
+                marginTop: 10
+              }}
+            >
+              <b>
+                Product search failed
+              </b>
+
+              <br />
+
+              {error}
+            </div>
+          )}
+
+          {!loading &&
+            !error &&
+            searched &&
+            products.length === 0 && (
+              <div
+                className="warning"
+                style={{
+                  marginTop: 10
+                }}
+              >
+                <b>
+                  No confirmed priced
+                  products found
+                </b>
+
+                <br />
+
+                No suitable products with
+                a confirmed public web
+                price were returned. Try
+                searching again or make
+                the material description
+                more specific.
+              </div>
+            )}
+
+          {!loading &&
+            products.length > 0 && (
+              <div
+                style={{
+                  marginTop: 12,
+                  display: 'grid',
+                  gap: 10
+                }}
+              >
+                <div
+                  style={{
+                    fontWeight: 800
+                  }}
+                >
+                  Product options
+                </div>
+
+                {products.map(
+                  (product, index) => {
+                    const productId =
+                      product.id ||
+                      `${product.supplier}-${product.sku}-${index}`;
+
+                    const isSelected =
+                      selected?.id ===
+                      productId;
+
+                    return (
+                      <div
+                        key={productId}
+                        style={{
+                          border:
+                            isSelected
+                              ? '2px solid #f59e0b'
+                              : '1px solid #d1d5db',
+                          borderRadius: 10,
+                          padding: 12,
+                          background:
+                            isSelected
+                              ? '#fff7ed'
+                              : '#ffffff',
+                          color: '#111827'
+                        }}
+                      >
+                        <div
+                          style={{
+                            display:
+                              'flex',
+                            justifyContent:
+                              'space-between',
+                            gap: 12,
+                            alignItems:
+                              'flex-start'
+                          }}
+                        >
+                          <div>
+                            <div
+                              style={{
+                                fontSize:
+                                  12,
+                                fontWeight:
+                                  800,
+                                color:
+                                  '#64748b',
+                                textTransform:
+                                  'uppercase'
+                              }}
+                            >
+                              {
+                                product.supplier
+                              }
+                            </div>
+
+                            <div
+                              style={{
+                                fontWeight:
+                                  800,
+                                marginTop: 3
+                              }}
+                            >
+                              {product.name}
+                            </div>
+
+                            {product.sku &&
+                              product.sku !==
+                                'Not listed' && (
+                                <div
+                                  style={{
+                                    fontSize:
+                                      12,
+                                    marginTop:
+                                      4,
+                                    color:
+                                      '#64748b'
+                                  }}
+                                >
+                                  SKU / Item:{' '}
+                                  {
+                                    product.sku
+                                  }
+                                </div>
+                              )}
+                          </div>
+
+                          <div
+                            style={{
+                              textAlign:
+                                'right',
+                              minWidth: 90
+                            }}
+                          >
+                            <div
+                              style={{
+                                fontSize:
+                                  20,
+                                fontWeight:
+                                  900
+                              }}
+                            >
+                              {money(
+                                product.price
+                              )}
+                            </div>
+
+                            <div
+                              style={{
+                                fontSize:
+                                  11,
+                                color:
+                                  '#64748b'
+                              }}
+                            >
+                              per{' '}
+                              {product.unit ||
+                                'each'}
+                            </div>
+                          </div>
+                        </div>
+
+                        {product.description && (
+                          <div
+                            style={{
+                              fontSize: 13,
+                              marginTop: 8,
+                              color:
+                                '#475569'
+                            }}
+                          >
+                            {
+                              product.description
+                            }
+                          </div>
+                        )}
+
+                        <div
+                          style={{
+                            fontSize: 11,
+                            marginTop: 8,
+                            color:
+                              '#64748b'
+                          }}
+                        >
+                          Web price — checked{' '}
+                          {new Date(
+                            product.checkedAt ||
+                              Date.now()
+                          ).toLocaleString(
+                            'en-AU'
+                          )}
+                        </div>
+
+                        <div
+                          style={{
+                            display:
+                              'flex',
+                            gap: 8,
+                            marginTop: 10,
+                            alignItems:
+                              'center'
+                          }}
+                        >
+                          <button
+                            type="button"
+                            className="btn"
+                            style={{
+                              flex: 1
+                            }}
+                            onClick={() =>
+                              onSelect({
+                                ...product,
+                                id:
+                                  productId
+                              })
+                            }
+                          >
+                            {isSelected
+                              ? '✓ Selected'
+                              : 'Select Product'}
+                          </button>
+
+                          {product.url && (
+                            <a
+                              href={
+                                product.url
+                              }
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              style={{
+                                fontSize:
+                                  12,
+                                fontWeight:
+                                  700
+                              }}
+                            >
+                              View supplier
+                            </a>
+                          )}
+                        </div>
+
+                        {isSelected && (
+                          <div
+                            style={{
+                              marginTop: 10,
+                              padding: 10,
+                              borderRadius: 8,
+                              background:
+                                '#f8fafc'
+                            }}
+                          >
+                            <b>
+                              {item.qty}{' '}
+                              {item.unit ||
+                                'each'}{' '}
+                              ×{' '}
+                              {money(
+                                product.price
+                              )}
+                            </b>
+
+                            <span>
+                              {' '}
+                              ={' '}
+                            </span>
+
+                            <b>
+                              {money(
+                                Number(
+                                  item.qty ||
+                                    0
+                                ) *
+                                  Number(
+                                    product.price ||
+                                      0
+                                  )
+                              )}
+                            </b>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  }
+                )}
+              </div>
+            )}
+        </>
       )}
     </div>
   );
 }
 
 export default function Home() {
-  const [trade, setTrade] = useState('Carpentry');
-  const [desc, setDesc] = useState('');
-  const [qty, setQty] = useState(5);
-  const [suburb, setSuburb] = useState('Campbelltown NSW');
+  const [trade, setTrade] =
+    useState('Carpentry');
 
-  const [labType, setLabType] = useState('hourly');
-  const [rate, setRate] = useState(85);
-  const [hours, setHours] = useState(12);
-  const [fixed, setFixed] = useState(1000);
+  const [desc, setDesc] =
+    useState('');
 
-  const [matMarkup, setMatMarkup] = useState(15);
-  const [labMarkup, setLabMarkup] = useState(0);
-  const [other, setOther] = useState(0);
-  const [gst, setGst] = useState(10);
+  const [qty, setQty] =
+    useState(5);
 
-  const [result, setResult] = useState(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
+  const [suburb, setSuburb] =
+    useState('Campbelltown NSW');
+
+  const [labType, setLabType] =
+    useState('hourly');
+
+  const [rate, setRate] =
+    useState(85);
+
+  const [hours, setHours] =
+    useState(12);
+
+  const [fixed, setFixed] =
+    useState(1000);
+
+  const [matMarkup, setMatMarkup] =
+    useState(15);
+
+  const [labMarkup, setLabMarkup] =
+    useState(0);
+
+  const [other, setOther] =
+    useState(0);
+
+  const [gst, setGst] =
+    useState(10);
+
+  const [result, setResult] =
+    useState(null);
+
+  const [loading, setLoading] =
+    useState(false);
+
+  const [error, setError] =
+    useState('');
+
+  const [
+    selectedProducts,
+    setSelectedProducts
+  ] = useState({});
 
   const labour =
     labType === 'hourly'
-      ? rate * hours
-      : fixed;
+      ? Number(rate || 0) *
+        Number(hours || 0)
+      : Number(fixed || 0);
+
+  const materialsTotal =
+    useMemo(() => {
+      if (!result?.items) {
+        return 0;
+      }
+
+      return result.items.reduce(
+        (total, item, index) => {
+          const selected =
+            selectedProducts[index];
+
+          if (!selected) {
+            return total;
+          }
+
+          const unitPrice =
+            Number(
+              selected.price || 0
+            );
+
+          const quantity =
+            Number(item.qty || 0);
+
+          return (
+            total +
+            unitPrice * quantity
+          );
+        },
+        0
+      );
+    }, [
+      result,
+      selectedProducts
+    ]);
+
+  const selectedCount =
+    useMemo(() => {
+      return Object.values(
+        selectedProducts
+      ).filter(Boolean).length;
+    }, [selectedProducts]);
+
+  const materialCount =
+    result?.items?.length || 0;
 
   const totals = useMemo(() => {
-    const materials = result?.materialsTotal || 0;
+    const materials =
+      materialsTotal;
 
     const mm =
-      (materials * matMarkup) / 100;
+      (materials *
+        Number(matMarkup || 0)) /
+      100;
 
     const lm =
-      (labour * labMarkup) / 100;
+      (labour *
+        Number(labMarkup || 0)) /
+      100;
 
     const sub =
       materials +
@@ -212,7 +678,9 @@ export default function Home() {
       Number(other || 0);
 
     const g =
-      (sub * gst) / 100;
+      (sub *
+        Number(gst || 0)) /
+      100;
 
     return {
       materials,
@@ -223,7 +691,7 @@ export default function Home() {
       total: sub + g
     };
   }, [
-    result,
+    materialsTotal,
     matMarkup,
     labour,
     labMarkup,
@@ -231,29 +699,50 @@ export default function Home() {
     gst
   ]);
 
+  function selectProduct(
+    index,
+    product
+  ) {
+    setSelectedProducts(
+      previous => ({
+        ...previous,
+        [index]: product
+      })
+    );
+  }
+
   async function quote(e) {
     e.preventDefault();
 
     setLoading(true);
     setError('');
 
+    // A new take-off means old
+    // product selections no longer apply.
+    setSelectedProducts({});
+
     try {
-      const r = await fetch('/api/quote', {
-        method: 'POST',
+      const r = await fetch(
+        '/api/quote',
+        {
+          method: 'POST',
 
-        headers: {
-          'content-type': 'application/json'
-        },
+          headers: {
+            'content-type':
+              'application/json'
+          },
 
-        body: JSON.stringify({
-          trade,
-          description: desc,
-          quantity: qty,
-          suburb
-        })
-      });
+          body: JSON.stringify({
+            trade,
+            description: desc,
+            quantity: qty,
+            suburb
+          })
+        }
+      );
 
-      const data = await r.json();
+      const data =
+        await r.json();
 
       if (!r.ok) {
         throw new Error(
@@ -265,7 +754,11 @@ export default function Home() {
       setResult(data);
     } catch (err) {
       setResult(null);
-      setError(err.message);
+
+      setError(
+        err.message ||
+          'Could not analyse the job.'
+      );
     } finally {
       setLoading(false);
     }
@@ -289,9 +782,12 @@ export default function Home() {
             className="btn"
             onClick={() =>
               document
-                .querySelector('#builder')
+                .querySelector(
+                  '#builder'
+                )
                 .scrollIntoView({
-                  behavior: 'smooth'
+                  behavior:
+                    'smooth'
                 })
             }
           >
@@ -322,11 +818,11 @@ export default function Home() {
           </h1>
 
           <p>
-            Describe the job, let AI build
-            the material take-off, find
-            suitable products from Australian
-            suppliers, then add labour,
-            markup and GST.
+            Describe the job, let AI
+            build the material take-off,
+            choose suitable products from
+            Australian suppliers, then
+            add labour, markup and GST.
           </p>
         </div>
       </section>
@@ -335,7 +831,11 @@ export default function Home() {
         id="builder"
         className="wrap section"
       >
-        <h2 style={{ fontSize: 34 }}>
+        <h2
+          style={{
+            fontSize: 34
+          }}
+        >
           Price your next job.
         </h2>
 
@@ -359,7 +859,9 @@ export default function Home() {
                   className="field"
                   value={trade}
                   onChange={e =>
-                    setTrade(e.target.value)
+                    setTrade(
+                      e.target.value
+                    )
                   }
                 >
                   {trades.map(x => (
@@ -372,20 +874,22 @@ export default function Home() {
 
               <div className="hint">
                 <b>
-                  💡 Describe the job naturally
+                  💡 Describe the job
+                  naturally
                 </b>
 
                 <br />
 
-                You don't need to choose a
-                brand or model unless you
-                already know exactly what you
-                want. Include measurements,
-                quantities and important
-                specifications where known.
-                The AI will create the
-                material take-off and product
-                search terms.
+                You don't need to choose
+                a brand or model unless
+                you already know exactly
+                what you want. Include
+                measurements, quantities
+                and important
+                specifications where
+                known. The AI will create
+                the material take-off and
+                product search terms.
               </div>
 
               <label>
@@ -396,7 +900,9 @@ export default function Home() {
                   rows="5"
                   value={desc}
                   onChange={e =>
-                    setDesc(e.target.value)
+                    setDesc(
+                      e.target.value
+                    )
                   }
                   placeholder={
                     tradeHelp[trade]
@@ -461,8 +967,8 @@ export default function Home() {
                   }}
                 >
                   <b>
-                    Could not build material
-                    list
+                    Could not build
+                    material list
                   </b>
 
                   <br />
@@ -480,12 +986,8 @@ export default function Home() {
                   <span className="step">
                     2
                   </span>
-                  &nbsp;
-
-                  {result.mode ===
-                  'ai_takeoff'
-                    ? 'AI Material Take-Off'
-                    : 'Matched Products'}
+                  &nbsp; AI Material
+                  Take-Off
                 </h3>
 
                 {result.summary && (
@@ -494,57 +996,161 @@ export default function Home() {
                   </p>
                 )}
 
+                <div
+                  className="hint"
+                  style={{
+                    marginBottom: 12
+                  }}
+                >
+                  <b>
+                    Select a product for
+                    each material
+                  </b>
+
+                  <br />
+
+                  {selectedCount} of{' '}
+                  {materialCount}{' '}
+                  materials currently
+                  priced.
+                </div>
+
                 {result.items?.map(
-                  (x, i) => (
-                    <div
-                      className="supplier"
-                      key={`${x.product}-${i}`}
-                      style={{
-                        display: 'block'
-                      }}
-                    >
+                  (x, i) => {
+                    const selected =
+                      selectedProducts[i];
+
+                    const lineTotal =
+                      selected
+                        ? Number(
+                            selected.price ||
+                              0
+                          ) *
+                          Number(
+                            x.qty || 0
+                          )
+                        : 0;
+
+                    return (
                       <div
+                        className="supplier"
+                        key={`${x.product}-${i}`}
                         style={{
-                          display: 'flex',
-                          justifyContent:
-                            'space-between',
-                          gap: 12,
-                          alignItems:
-                            'flex-start'
+                          display:
+                            'block'
                         }}
                       >
-                        <div>
-                          <b>
-                            {x.product}
-                          </b>
+                        <div
+                          style={{
+                            display:
+                              'flex',
+                            justifyContent:
+                              'space-between',
+                            gap: 12,
+                            alignItems:
+                              'flex-start'
+                          }}
+                        >
+                          <div>
+                            <b>
+                              {x.product}
+                            </b>
 
-                          <div className="status">
-                            Qty {x.qty}{' '}
-                            {x.unit ||
-                              'each'}
+                            <div className="status">
+                              Qty {x.qty}{' '}
+                              {x.unit ||
+                                'each'}
 
-                            {x.category
-                              ? ` • ${x.category}`
-                              : ''}
+                              {x.category
+                                ? ` • ${x.category}`
+                                : ''}
+                            </div>
+
+                            <div className="status">
+                              {
+                                x.matchStatus
+                              }
+                            </div>
                           </div>
 
-                          <div className="status">
-                            {x.matchStatus}
+                          <div
+                            style={{
+                              textAlign:
+                                'right'
+                            }}
+                          >
+                            <b>
+                              {money(
+                                lineTotal
+                              )}
+                            </b>
+
+                            {selected && (
+                              <div
+                                className="status"
+                              >
+                                {money(
+                                  selected.price
+                                )}{' '}
+                                each
+                              </div>
+                            )}
                           </div>
                         </div>
 
-                        <b>
-                          {money(
-                            x.total
-                          )}
-                        </b>
-                      </div>
+                        {selected && (
+                          <div
+                            className="hint"
+                            style={{
+                              marginTop:
+                                10
+                            }}
+                          >
+                            <b>
+                              ✓{' '}
+                              {
+                                selected.supplier
+                              }
+                            </b>
 
-                      <ProductFinder
-                        item={x}
-                      />
-                    </div>
-                  )
+                            <br />
+
+                            {selected.name}
+
+                            <br />
+
+                            {x.qty} ×{' '}
+                            {money(
+                              selected.price
+                            )}{' '}
+                            ={' '}
+
+                            <b>
+                              {money(
+                                lineTotal
+                              )}
+                            </b>
+                          </div>
+                        )}
+
+                        <ProductFinder
+                          item={x}
+                          suburb={
+                            suburb
+                          }
+                          selected={
+                            selected
+                          }
+                          onSelect={product =>
+                            selectProduct(
+                              i,
+                              product
+                            )
+                          }
+                        />
+                      </div>
+                    );
+                  }
                 )}
 
                 {result.questions
@@ -556,8 +1162,9 @@ export default function Home() {
                     }}
                   >
                     <b>
-                      Additional information
-                      that may help product
+                      Additional
+                      information that
+                      may help product
                       matching
                     </b>
 
@@ -580,9 +1187,12 @@ export default function Home() {
             <div className="card">
               <h3>
                 <span className="step">
-                  {result ? '3' : '2'}
+                  {result
+                    ? '3'
+                    : '2'}
                 </span>
-                &nbsp; Labour &amp; Profit
+                &nbsp; Labour &amp;
+                Profit
               </h3>
 
               <div className="two">
@@ -608,7 +1218,8 @@ export default function Home() {
                   </select>
                 </label>
 
-                {labType === 'hourly' ? (
+                {labType ===
+                'hourly' ? (
                   <>
                     <label>
                       Hourly rate ($)
@@ -652,7 +1263,8 @@ export default function Home() {
                       value={fixed}
                       onChange={e =>
                         setFixed(
-                          +e.target.value
+                          +e.target
+                            .value
                         )
                       }
                     />
@@ -739,6 +1351,23 @@ export default function Home() {
 
               <h2>{trade}</h2>
 
+              {result && (
+                <div
+                  style={{
+                    marginBottom: 14
+                  }}
+                >
+                  <div className="muted">
+                    MATERIALS PRICED
+                  </div>
+
+                  <b>
+                    {selectedCount} /{' '}
+                    {materialCount}
+                  </b>
+                </div>
+              )}
+
               <div className="row">
                 <span>
                   Materials
@@ -823,22 +1452,68 @@ export default function Home() {
                 </strong>
               </div>
 
-              <div className="warning">
-                <b>
-                  {result?.mode ===
-                  'live'
-                    ? 'LIVE PRICING'
-                    : result?.mode ===
-                      'ai_takeoff'
-                    ? 'AI MATERIAL TAKE-OFF — PRICING NOT CONNECTED'
-                    : 'PRICING NOT CONNECTED'}
-                </b>
+              {result &&
+              materialCount > 0 &&
+              selectedCount <
+                materialCount ? (
+                <div className="warning">
+                  <b>
+                    QUOTE STILL BEING
+                    PRICED
+                  </b>
 
-                <br />
+                  <br />
 
-                {result?.message ||
-                  'Build the material take-off, then use Find Product Options to check supplier catalogues. Website prices must be verified before being treated as current.'}
-              </div>
+                  Select products for all
+                  materials before using
+                  this as the final
+                  customer quote.
+
+                  <br />
+                  <br />
+
+                  {selectedCount} of{' '}
+                  {materialCount}{' '}
+                  materials have been
+                  priced.
+                </div>
+              ) : result &&
+                materialCount > 0 ? (
+                <div className="hint">
+                  <b>
+                    ✓ MATERIALS PRICED
+                  </b>
+
+                  <br />
+
+                  All AI material items
+                  currently have a
+                  selected supplier
+                  product.
+
+                  <br />
+                  <br />
+
+                  Prices shown are public
+                  web prices, not
+                  guaranteed trade-account
+                  pricing.
+                </div>
+              ) : (
+                <div className="warning">
+                  <b>
+                    MATERIALS NOT PRICED
+                  </b>
+
+                  <br />
+
+                  Build the material
+                  take-off, find supplier
+                  products and select the
+                  products you want to
+                  use.
+                </div>
+              )}
             </div>
           </aside>
         </div>
