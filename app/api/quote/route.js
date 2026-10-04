@@ -38,7 +38,19 @@ Job description: ${description}
 User quantity/area: ${body.quantity || ''}
 Job suburb: ${body.suburb || ''}
 
-Create a practical material take-off for this job. Use Australian trade terminology and metric measurements. Extract exact brands, sizes, colours, finishes and product types when the user supplies them. Do not invent brands, supplier SKUs, supplier prices or exact product models. If an important specification is missing, keep the material generic and set needsConfirmation=true. Include normal consumables only when they are reasonably required by the described work. Do not include labour.
+Create a practical material take-off for this job. Use Australian trade terminology and metric measurements.
+
+IMPORTANT PRODUCT MATCHING RULES:
+- If the user gives an exact brand, model, size, colour, finish or product type, preserve those details.
+- If the user does NOT give a brand, model, colour, finish or style, DO NOT ask them to choose one before creating the material take-off.
+- Use a general product description instead. The website will later show the user multiple suitable supplier products and varieties to choose from.
+- For example, "5 internal doors with passage handles and hinges" should produce internal doors, passage handle sets and the appropriate quantity of hinges without asking for a door brand, handle brand, style or finish.
+- If the user asks for "20mm copper pipe", keep it as 20mm copper pipe without asking for a brand.
+- If the user asks for "double power points", keep them as double power points without asking for a brand, range, colour or style.
+- Only ask a confirmation question when information is genuinely required to determine the correct material or compatibility. Do not ask questions merely because there are multiple brands, styles, colours, finishes or supplier products available.
+- Do not invent brands, models, sizes or specifications the user did not provide.
+- When multiple suitable products could satisfy the request, create the generic material item and allow the supplier/product matching stage to present the available varieties later.
+- Include normal installation consumables or associated materials when they would reasonably be required for the job.
 
 Return JSON only, matching the supplied schema.`;
 const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
