@@ -1,576 +1,337 @@
 import { NextResponse } from 'next/server';
 
-const SUPPLIERS = [
-  {
-    name: 'Bunnings',
-    domain: 'bunnings.com.au'
-  },
-  {
-    name: 'Mitre 10',
-    domain: 'mitre10.com.au'
-  },
-  {
-    name: 'Bowens',
-    domain: 'bowens.com.au'
-  },
-  {
-    name: 'Reece',
-    domain: 'reece.com.au'
+const TOKEN_URL =
+  'https://connect.sandbox.api.bunnings.com.au/connect/token';
+
+const ITEM_BASE_URL =
+  'https://item.sandbox.api.bunnings.com.au/item';
+
+const PRICING_BASE_URL =
+  'https://pricing.sandbox.api.bunnings.com.au/pricing';
+
+// Sandbox location used while developing.
+// Later we will replace this with the actual Bunnings location selected
+// from the customer's suburb/store.
+const DEFAULT_LOCATION = '7040';
+
+function clean(value = '') {
+  return String(value).replace(/\s+/g, ' ').trim();
+}
+
+async function getBunningsToken() {
+  const consumerKey = process.env.BUNNINGS_CONSUMER_KEY;
+  const consumerSecret = process.env.BUNNINGS_CONSUMER_SECRET;
+
+  if (!consumerKey || !consumerSecret) {
+    throw new Error(
+      'Bunnings credentials are missing from Railway environment variables.'
+    );
   }
-];
 
-function cleanText(value = '') {
-  return String(value)
-    .replace(/\s+/g, ' ')
-    .trim();
-}
+  const basicAuth = Buffer.from(
+    `${consumerKey}:${consumerSecret}`
+  ).toString('base64');
 
-function cleanTitle(title = '') {
-  return cleanText(title)
-    .replace(/\s*\|\s*Bunnings.*$/i, '')
-    .replace(/\s*\|\s*Mitre\s*10.*$/i, '')
-    .replace(/\s*\|\s*Bowens.*$/i, '')
-    .replace(/\s*\|\s*Reece.*$/i, '')
-    .replace(/\s*-\s*Bunnings.*$/i, '')
-    .replace(/\s*-\s*Mitre\s*10.*$/i, '')
-    .replace(/\s*-\s*Bowens.*$/i, '')
-    .replace(/\s*-\s*Reece.*$/i, '')
-    .trim();
-}
+  const body = new URLSearchParams({
+    grant_type: 'client_credentials',
+    scope: 'itm:details pri:pub',
+  });
 
-function normaliseUrl(url = '') {
+  const response = await fetch(TOKEN_URL, {
+    method: 'POST',
+    headers: {
+      Authorization: `Basic ${basicAuth}`,
+      'Content-Type': 'application/x-www-form-urlencoded',
+      Accept: 'application/json',
+    },
+    body: body.toString(),
+    cache: 'no-store',
+  });
+
+  const text = await response.text();
+
+  if (!response.ok) {
+    console.error('Bunnings OAuth error:', response.status, text);
+
+    throw new Error(
+      `Bunnings authentication failed (${response.status}).`
+    );
+  }
+
+  let data;
+
   try {
-    const parsed = new URL(url);
-
-    parsed.hash = '';
-
-    [
-      'utm_source',
-      'utm_medium',
-      'utm_campaign',
-      'utm_term',
-      'utm_content',
-      'gclid'
-    ].forEach(key =>
-      parsed.searchParams.delete(key)
-    );
-
-    return parsed.toString();
+    data = JSON.parse(text);
   } catch {
-    return '';
+    throw new Error('Bunnings authentication returned invalid JSON.');
   }
+
+  if (!data.access_token) {
+    throw new Error('Bunnings authentication did not return an access token.');
+  }
+
+  return data.access_token;
 }
 
-function isBadPage(title = '', url = '', snippet = '') {
-  const text =
-    `${title} ${url} ${snippet}`.toLowerCase();
+async function searchBunnings(query, token) {
+  const response = await fetch(`${ITEM_BASE_URL}/search/AU`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/json',
+      Accept: 'application/json',
+      'x-version-api': '1.3',
+    },
+    body: JSON.stringify({
+      query,
+      filters: {
+        locationCode: DEFAULT_LOCATION,
+        availableInStoreAllProducts: {
+          allProducts: false,
+          inStoreToday: false,
+        },
+      },
+      sortBy: 'relevancy',
+    }),
+    cache: 'no-store',
+  });
 
-  const badPhrases = [
-    'how to',
-    'how-to',
-    'buying guide',
-    'project guide',
-    'diy advice',
-    'ideas & advice',
-    'ideas and advice',
-    'inspiration',
-    'shop our range',
-    'browse our range',
-    'view our range',
-    'range of ',
-    'search results',
-    'catalogue',
-    'catalog ',
-    'all products',
-    'products |',
-    'products -'
-  ];
+  const text = await response.text();
 
-  const badUrlParts = [
-    '/search',
-    '/category',
-    '/categories',
-    '/blog',
-    '/advice',
-    '/ideas',
-    '/inspiration',
-    '/how-to',
-    '/howto'
-  ];
+  if (!response.ok) {
+    console.error('Bunnings Item Query error:', response.status, text);
 
-  if (
-    badPhrases.some(phrase =>
-      text.includes(phrase)
-    )
-  ) {
-    return true;
-  }
-
-  if (
-    badUrlParts.some(part =>
-      url.toLowerCase().includes(part)
-    )
-  ) {
-    return true;
-  }
-
-  return false;
-}
-
-function looksLikeBunningsProduct(url = '') {
-  // Individual Bunnings product URLs commonly
-  // end with an item code such as _p0123456.
-  return /_p\d+/i.test(url);
-}
-
-function looksLikeIndividualProduct(
-  supplier,
-  result
-) {
-  const title =
-    cleanTitle(result?.title || '');
-
-  const url =
-    normaliseUrl(result?.link || '');
-
-  const snippet =
-    cleanText(result?.snippet || '');
-
-  if (!title || !url) {
-    return false;
-  }
-
-  if (
-    !url
-      .toLowerCase()
-      .includes(
-        supplier.domain
-      )
-  ) {
-    return false;
-  }
-
-  if (
-    isBadPage(
-      title,
-      url,
-      snippet
-    )
-  ) {
-    return false;
-  }
-
-  if (
-    supplier.name === 'Bunnings'
-  ) {
-    return looksLikeBunningsProduct(
-      url
+    throw new Error(
+      `Bunnings product search failed (${response.status}).`
     );
   }
 
-  return true;
+  try {
+    return JSON.parse(text);
+  } catch {
+    throw new Error('Bunnings product search returned invalid JSON.');
+  }
 }
 
-function getPrices(text = '') {
-  const cleaned =
-    cleanText(text)
-      .replace(/,/g, '');
+async function getBunningsPrices(itemNumbers, token) {
+  if (!itemNumbers.length) {
+    return new Map();
+  }
 
-  const matches = [
-    ...cleaned.matchAll(
-      /\$\s*([0-9]+(?:\.[0-9]{1,2})?)/g
-    )
-  ];
+  const response = await fetch(
+    `${PRICING_BASE_URL}/catalog/prices`,
+    {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+        'x-version-api': '1.0',
+      },
+      body: JSON.stringify({
+        context: {
+          country: 'AU',
+          location: DEFAULT_LOCATION,
+        },
+        items: itemNumbers.map((itemNumber) => ({
+          itemNumber,
+        })),
+      }),
+      cache: 'no-store',
+    }
+  );
 
-  return matches
-    .map(match =>
-      Number(match[1])
-    )
+  const text = await response.text();
+
+  if (!response.ok) {
+    console.error('Bunnings Pricing error:', response.status, text);
+
+    throw new Error(
+      `Bunnings pricing request failed (${response.status}).`
+    );
+  }
+
+  let data;
+
+  try {
+    data = JSON.parse(text);
+  } catch {
+    throw new Error('Bunnings pricing returned invalid JSON.');
+  }
+
+  const priceMap = new Map();
+
+  for (const price of data?.prices || []) {
+    if (!price?.itemNumber) continue;
+
+    const unitPrice = Number(price.unitPrice);
+
+    if (!Number.isFinite(unitPrice)) continue;
+
+    priceMap.set(String(price.itemNumber), {
+      unitPrice,
+      lineUnitPrice: Number(price.lineUnitPrice),
+      priceId: price.priceId || null,
+    });
+  }
+
+  return priceMap;
+}
+
+function normaliseSearchResults(data) {
+  const results = Array.isArray(data?.results)
+    ? data.results
+    : [];
+
+  return results
+    .map((item) => {
+      const itemNumber =
+        item?.itemNumber ||
+        item?._meta?.itemNumber ||
+        '';
+
+      return {
+        itemNumber: clean(itemNumber),
+        title: clean(
+          item?.title ||
+          item?.description ||
+          ''
+        ),
+      };
+    })
     .filter(
-      price =>
-        Number.isFinite(price) &&
-        price > 0 &&
-        price < 100000
+      (item) =>
+        /^\d{7}$/.test(item.itemNumber) &&
+        item.title
     );
 }
 
-function choosePrice(result) {
-  /*
-    Prefer a price appearing in the title.
-
-    If the title has no price, only use the
-    snippet when there is exactly ONE dollar
-    amount.
-
-    This prevents the old problem where a
-    category page containing "$17.98,
-    $19.98, $29.98..." accidentally became
-    a $17 product.
-  */
-
-  const titlePrices =
-    getPrices(
-      result?.title || ''
-    );
-
-  if (
-    titlePrices.length === 1
-  ) {
-    return titlePrices[0];
-  }
-
-  const snippetPrices =
-    getPrices(
-      result?.snippet || ''
-    );
-
-  if (
-    snippetPrices.length === 1
-  ) {
-    return snippetPrices[0];
-  }
-
+function buildBunningsUrl(item) {
+  // We do not invent a Bunnings product URL.
+  // A proper product URL can be added later if the Item API supplies one.
   return null;
 }
 
-function getSkuFromBunningsUrl(
-  url = ''
-) {
-  const match =
-    url.match(
-      /_p(\d+)/i
-    );
-
-  if (!match) {
-    return 'Not listed';
-  }
-
-  return `P${match[1]}`;
-}
-
-function getSku(
-  supplier,
-  url
-) {
-  if (
-    supplier === 'Bunnings'
-  ) {
-    return getSkuFromBunningsUrl(
-      url
-    );
-  }
-
-  return 'Not listed';
-}
-
-function makeId(
-  supplier,
-  url
-) {
-  return `${supplier}-${url}`
-    .replace(
-      /[^a-zA-Z0-9]/g,
-      ''
-    )
-    .slice(0, 100);
-}
-
-async function searchSerper(
-  q
-) {
-  const response =
-    await fetch(
-      'https://google.serper.dev/search',
-      {
-        method: 'POST',
-
-        headers: {
-          'X-API-KEY':
-            process.env
-              .SERPER_API_KEY,
-
-          'Content-Type':
-            'application/json'
-        },
-
-        body: JSON.stringify({
-          q,
-          gl: 'au',
-          hl: 'en',
-          num: 10
-        }),
-
-        cache: 'no-store'
-      }
-    );
-
-  if (!response.ok) {
-    const body =
-      await response.text();
-
-    console.error(
-      'Serper error:',
-      response.status,
-      body
-    );
-
-    return null;
-  }
-
-  return response.json();
-}
-
-async function searchSupplier(
-  supplier,
-  query
-) {
-  /*
-    These search phrases deliberately push
-    Google toward individual product pages.
-  */
-
-  const searches =
-    supplier.name === 'Bunnings'
-      ? [
-          `site:bunnings.com.au "${query}" _p`,
-          `site:bunnings.com.au ${query} price`
-        ]
-      : [
-          `site:${supplier.domain} "${query}" price`,
-          `site:${supplier.domain} ${query} product`
-        ];
-
-  const results = [];
-  const seen = new Set();
-
-  for (const searchQuery of searches) {
-    const data =
-      await searchSerper(
-        searchQuery
-      );
-
-    if (!data) {
-      continue;
-    }
-
-    const organic =
-      Array.isArray(data.organic)
-        ? data.organic
-        : [];
-
-    for (const result of organic) {
-      if (
-        !looksLikeIndividualProduct(
-          supplier,
-          result
-        )
-      ) {
-        continue;
-      }
-
-      const url =
-        normaliseUrl(
-          result.link
-        );
-
-      if (
-        !url ||
-        seen.has(url)
-      ) {
-        continue;
-      }
-
-      const price =
-        choosePrice(result);
-
-      /*
-        Don't show a selectable product unless
-        Serper gave us one unambiguous price.
-      */
-      if (!price) {
-        continue;
-      }
-
-      const name =
-        cleanTitle(
-          result.title
-        );
-
-      if (!name) {
-        continue;
-      }
-
-      seen.add(url);
-
-      results.push({
-        id: makeId(
-          supplier.name,
-          url
-        ),
-
-        supplier:
-          supplier.name,
-
-        name,
-
-        sku: getSku(
-          supplier.name,
-          url
-        ),
-
-        price,
-
-        unit: 'each',
-
-        url,
-
-        description:
-          cleanText(
-            result.snippet || ''
-          ).slice(0, 300),
-
-        priceType:
-          'search-result',
-
-        checkedAt:
-          new Date().toISOString()
-      });
-
-      if (
-        results.length >= 5
-      ) {
-        break;
-      }
-    }
-
-    if (
-      results.length >= 3
-    ) {
-      break;
-    }
-  }
-
-  return results;
-}
-
-function dedupeProducts(
-  products
-) {
-  const seen =
-    new Set();
-
-  return products.filter(
-    product => {
-      const key =
-        product.url;
-
-      if (
-        seen.has(key)
-      ) {
-        return false;
-      }
-
-      seen.add(key);
-
-      return true;
-    }
-  );
-}
-
-export async function POST(
-  request
-) {
+export async function POST(request) {
   try {
-    if (
-      !process.env
-        .SERPER_API_KEY
-    ) {
-      return NextResponse.json(
-        {
-          error:
-            'SERPER_API_KEY is not configured in Railway.'
-        },
-        {
-          status: 500
-        }
-      );
-    }
+    const body = await request.json();
 
-    const body =
-      await request.json();
-
-    const query =
-      cleanText(
-        body?.query || ''
-      );
+    const query = clean(body?.query);
+    const suburb = clean(body?.suburb);
 
     if (!query) {
       return NextResponse.json(
         {
-          error:
-            'A product search query is required.'
+          error: 'A product search query is required.',
+          products: [],
         },
-        {
-          status: 400
-        }
+        { status: 400 }
       );
     }
 
-    const searches =
-      await Promise.all(
-        SUPPLIERS.map(
-          supplier =>
-            searchSupplier(
-              supplier,
-              query
-            )
-        )
-      );
+    const token = await getBunningsToken();
 
-    const products =
-      dedupeProducts(
-        searches.flat()
-      )
-        .sort(
-          (a, b) =>
-            a.price -
-            b.price
-        )
-        .slice(0, 16);
+    const searchData = await searchBunnings(
+      query,
+      token
+    );
+
+    const searchResults =
+      normaliseSearchResults(searchData).slice(0, 10);
+
+    if (!searchResults.length) {
+      return NextResponse.json({
+        products: [],
+        source: 'Bunnings official API',
+        environment: 'sandbox',
+        query,
+        suburb,
+        message:
+          'Bunnings returned no matching products for this search.',
+      });
+    }
+
+    const itemNumbers = searchResults.map(
+      (item) => item.itemNumber
+    );
+
+    const prices = await getBunningsPrices(
+      itemNumbers,
+      token
+    );
+
+    const checkedAt = new Date().toISOString();
+
+    const products = searchResults.map((item) => {
+      const pricing = prices.get(item.itemNumber);
+
+      const verified =
+        pricing &&
+        Number.isFinite(pricing.unitPrice);
+
+      return {
+        supplier: 'Bunnings',
+        name: item.title,
+        sku: item.itemNumber,
+
+        // Only an official Pricing API response becomes a price.
+        price: verified
+          ? pricing.unitPrice
+          : null,
+
+        unit: 'each',
+
+        description: verified
+          ? `Official Bunnings sandbox price for item ${item.itemNumber}.`
+          : 'Price not verified — cannot add to quote.',
+
+        url: buildBunningsUrl(item),
+
+        checkedAt,
+
+        priceVerified: Boolean(verified),
+
+        priceSource: verified
+          ? 'Bunnings Pricing API'
+          : null,
+
+        priceId: verified
+          ? pricing.priceId
+          : null,
+
+        environment: 'sandbox',
+
+        matchStatus:
+          'Matched through Bunnings Item Query API',
+      };
+    });
+
+    // Products with a verified official price first.
+    products.sort((a, b) => {
+      return Number(b.priceVerified) -
+        Number(a.priceVerified);
+    });
 
     return NextResponse.json({
-      query,
-
       products,
-
-      searchedSuppliers:
-        SUPPLIERS.map(
-          supplier =>
-            supplier.name
-        ),
-
-      message:
-        products.length > 0
-          ? `${products.length} individual product options found.`
-          : 'No individual supplier products with an unambiguous public price were found.',
-
-      checkedAt:
-        new Date().toISOString()
+      source: 'Bunnings official API',
+      environment: 'sandbox',
+      query,
+      suburb,
+      locationCode: DEFAULT_LOCATION,
+      checkedAt,
     });
   } catch (error) {
-    console.error(
-      'Product search error:',
-      error
-    );
+    console.error('Product API error:', error);
 
     return NextResponse.json(
       {
         error:
-          'Could not search supplier products.'
+          error?.message ||
+          'Unable to search Bunnings products.',
+        products: [],
       },
-      {
-        status: 500
-      }
+      { status: 500 }
     );
   }
 }
