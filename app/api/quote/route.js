@@ -1,6 +1,6 @@
 import {NextResponse} from 'next/server';
 
-const MODEL = process.env.GEMINI_MODEL || 'gemini-2.5-flash';
+const MODEL = process.env.GEMINI_MODEL || 'gemini-3.8-flash';
 
 function cleanItem(item, index) {
   const qty = Math.max(0, Number(item?.quantity) || 0);
