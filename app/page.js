@@ -31,48 +31,150 @@ const money = n =>
   }).format(Number(n) || 0);
 
 const tradeHelp = {
-  'Carpentry': 'Describe the carpentry work. Include quantities, dimensions, door or window sizes, timber sizes and lengths, sheet materials, hardware and any materials you already know are required.',
+  Carpentry:
+    'Describe the carpentry work. Include quantities, dimensions, door or window sizes, timber sizes and lengths, sheet materials, hardware and any materials you already know are required.',
 
-  'Plastering': 'Describe the plastering work. Include wall or ceiling dimensions, sheet type or thickness, number of rooms or areas, cornice and any other materials you know are required.',
+  Plastering:
+    'Describe the plastering work. Include wall or ceiling dimensions, sheet type or thickness, number of rooms or areas, cornice and any other materials you know are required.',
 
-  'Decking': 'Describe the deck work. Include length and width, height, decking material if known, board sizes, stairs, handrails and any framing details you know.',
+  Decking:
+    'Describe the deck work. Include length and width, height, decking material if known, board sizes, stairs, handrails and any framing details you know.',
 
-  'Painting': 'Describe what needs painting. Include room or area dimensions, walls, ceilings or exterior areas, surface type, number of coats and paint type if known.',
+  Painting:
+    'Describe what needs painting. Include room or area dimensions, walls, ceilings or exterior areas, surface type, number of coats and paint type if known.',
 
-  'Tiling': 'Describe the tiling work. Include floor or wall dimensions, tile size and type if known, waterproofing, grout, adhesive and trims where required.',
+  Tiling:
+    'Describe the tiling work. Include floor or wall dimensions, tile size and type if known, waterproofing, grout, adhesive and trims where required.',
 
-  'Flooring': 'Describe the flooring work. Include room or floor dimensions, flooring type, board or plank size if known, underlay, trims and any floor preparation required.',
+  Flooring:
+    'Describe the flooring work. Include room or floor dimensions, flooring type, board or plank size if known, underlay, trims and any floor preparation required.',
 
-  'Fencing': 'Describe the fencing work. Include total length, fence height, material or fence type, gates, sleepers and any other requirements.',
+  Fencing:
+    'Describe the fencing work. Include total length, fence height, material or fence type, gates, sleepers and any other requirements.',
 
-  'Roofing': 'Describe the roofing work. Include roof dimensions or area, roofing material, sheets or tiles, flashings, gutters, downpipes and insulation where required.',
+  Roofing:
+    'Describe the roofing work. Include roof dimensions or area, roofing material, sheets or tiles, flashings, gutters, downpipes and insulation where required.',
 
-  'Bricklaying & Masonry': 'Describe the brick or masonry work. Include wall length and height, brick or block type and size if known, openings, piers, lintels and reinforcement.',
+  'Bricklaying & Masonry':
+    'Describe the brick or masonry work. Include wall length and height, brick or block type and size if known, openings, piers, lintels and reinforcement.',
 
-  'Concreting': 'Describe the concreting work. Include length, width and thickness, concrete type or strength if known, reinforcement, formwork and required finish.',
+  Concreting:
+    'Describe the concreting work. Include length, width and thickness, concrete type or strength if known, reinforcement, formwork and required finish.',
 
-  'Landscaping': 'Describe the landscaping work. Include area dimensions, soil or mulch depths, turf, plants, edging, retaining walls, drainage and paving where required.',
+  Landscaping:
+    'Describe the landscaping work. Include area dimensions, soil or mulch depths, turf, plants, edging, retaining walls, drainage and paving where required.',
 
-  'Plumbing': 'Describe the plumbing work. Include pipe type and size, approximate lengths, fittings, fixtures, connection sizes, valves, wastes and quantities where known.',
+  Plumbing:
+    'Describe the plumbing work. Include pipe type and size, approximate lengths, fittings, fixtures, connection sizes, valves, wastes and quantities where known.',
 
-  'Electrical': 'Describe the electrical work. Include quantities of power points, switches, lights or circuits, cable requirements, sizes or ratings and any specific products where known.',
+  Electrical:
+    'Describe the electrical work. Include quantities of power points, switches, lights or circuits, cable requirements, sizes or ratings and any specific products where known.',
 
-  'Cabinetry & Joinery': 'Describe the cabinetry or joinery work. Include cabinet dimensions and quantities, sheet material, doors, drawers, benchtops, hinges, handles and hardware.',
+  'Cabinetry & Joinery':
+    'Describe the cabinetry or joinery work. Include cabinet dimensions and quantities, sheet material, doors, drawers, benchtops, hinges, handles and hardware.',
 
-  'Windows & Doors': 'Describe the window or door work. Include quantities, dimensions, internal or external use, handles, locks, hinges, stops and any materials you know are required.',
+  'Windows & Doors':
+    'Describe the window or door work. Include quantities, dimensions, internal or external use, handles, locks, hinges, stops and any materials you know are required.',
 
-  'Demolition': 'Describe what needs to be removed. Include dimensions or quantities, material types, fixtures being removed and any disposal requirements.',
+  Demolition:
+    'Describe what needs to be removed. Include dimensions or quantities, material types, fixtures being removed and any disposal requirements.',
 
-  'General Handyman': 'Describe the work being completed. Include quantities, dimensions, materials, replacement parts, fixings and anything else you know is required.',
+  'General Handyman':
+    'Describe the work being completed. Include quantities, dimensions, materials, replacement parts, fixings and anything else you know is required.',
 
-  'Other / General materials': 'Describe the work in detail. Include quantities, measurements, sizes, material types, fittings, fixings and any products you already know are required.'
+  'Other / General materials':
+    'Describe the work in detail. Include quantities, measurements, sizes, material types, fittings, fixings and any products you already know are required.'
 };
+
+function supplierSearches(searchQuery) {
+  const q = encodeURIComponent(searchQuery || '');
+
+  return [
+    {
+      name: 'Bunnings',
+      url: `https://www.bunnings.com.au/search/products?q=${q}`
+    },
+    {
+      name: 'Mitre 10',
+      url: `https://www.mitre10.com.au/?q=${q}`
+    },
+    {
+      name: 'Bowens',
+      url: `https://www.bowens.com.au/search/?page=1&query=${q}`
+    },
+    {
+      name: 'Reece',
+      url: `https://www.reece.com.au/search/index.html?q=${q}`
+    }
+  ];
+}
+
+function ProductFinder({ item }) {
+  const [open, setOpen] = useState(false);
+
+  const query = item.searchQuery || item.product || '';
+
+  return (
+    <div style={{ marginTop: 12 }}>
+      <button
+        type="button"
+        className="btn"
+        style={{ width: '100%' }}
+        onClick={() => setOpen(v => !v)}
+      >
+        {open ? 'Hide Product Options' : 'Find Product Options'}
+      </button>
+
+      {open && (
+        <div className="hint" style={{ marginTop: 10 }}>
+          <b>Search supplier catalogues</b>
+
+          <div style={{ marginTop: 5 }}>
+            Search term: <b>{query}</b>
+          </div>
+
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
+              gap: 8,
+              marginTop: 10
+            }}
+          >
+            {supplierSearches(query).map(supplier => (
+              <a
+                key={supplier.name}
+                href={supplier.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="btn"
+                style={{
+                  textAlign: 'center',
+                  textDecoration: 'none',
+                  display: 'block'
+                }}
+              >
+                Search {supplier.name}
+              </a>
+            ))}
+          </div>
+
+          <div style={{ marginTop: 10, fontSize: 12 }}>
+            Supplier pages open directly so you can check the matching product,
+            current web price and availability. Website prices are not treated
+            as live trade-account pricing.
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
 
 export default function Home() {
   const [trade, setTrade] = useState('Carpentry');
   const [desc, setDesc] = useState('');
   const [qty, setQty] = useState(5);
-  const [suburb, setSuburb] = useState('Suburb');
+  const [suburb, setSuburb] = useState('Campbelltown NSW');
 
   const [labType, setLabType] = useState('hourly');
   const [rate, setRate] = useState(85);
@@ -88,12 +190,20 @@ export default function Home() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
 
-  const labour = labType === 'hourly' ? rate * hours : fixed;
+  const labour =
+    labType === 'hourly'
+      ? rate * hours
+      : fixed;
 
   const totals = useMemo(() => {
     const materials = result?.materialsTotal || 0;
-    const mm = materials * matMarkup / 100;
-    const lm = labour * labMarkup / 100;
+
+    const mm =
+      (materials * matMarkup) / 100;
+
+    const lm =
+      (labour * labMarkup) / 100;
+
     const sub =
       materials +
       mm +
@@ -101,7 +211,8 @@ export default function Home() {
       lm +
       Number(other || 0);
 
-    const g = sub * gst / 100;
+    const g =
+      (sub * gst) / 100;
 
     return {
       materials,
@@ -111,19 +222,29 @@ export default function Home() {
       g,
       total: sub + g
     };
-  }, [result, matMarkup, labour, labMarkup, other, gst]);
+  }, [
+    result,
+    matMarkup,
+    labour,
+    labMarkup,
+    other,
+    gst
+  ]);
 
   async function quote(e) {
     e.preventDefault();
+
     setLoading(true);
     setError('');
 
     try {
       const r = await fetch('/api/quote', {
         method: 'POST',
+
         headers: {
           'content-type': 'application/json'
         },
+
         body: JSON.stringify({
           trade,
           description: desc,
@@ -135,7 +256,10 @@ export default function Home() {
       const data = await r.json();
 
       if (!r.ok) {
-        throw new Error(data.error || 'Could not analyse the job.');
+        throw new Error(
+          data.error ||
+            'Could not analyse the job.'
+        );
       }
 
       setResult(data);
@@ -152,8 +276,13 @@ export default function Home() {
       <header className="nav">
         <div className="wrap navin">
           <div>
-            <div className="logo">🛠️ Tradie Toolkit AU</div>
-            <div className="tag">QUOTE SMARTER. WIN MORE WORK.</div>
+            <div className="logo">
+              🛠️ Tradie Toolkit AU
+            </div>
+
+            <div className="tag">
+              QUOTE SMARTER. WIN MORE WORK.
+            </div>
           </div>
 
           <button
@@ -161,7 +290,9 @@ export default function Home() {
             onClick={() =>
               document
                 .querySelector('#builder')
-                .scrollIntoView({ behavior: 'smooth' })
+                .scrollIntoView({
+                  behavior: 'smooth'
+                })
             }
           >
             Build a Quote
@@ -184,27 +315,40 @@ export default function Home() {
           <h1>
             Quote jobs faster.
             <br />
-            <span>Know your numbers.</span>
+
+            <span>
+              Know your numbers.
+            </span>
           </h1>
 
           <p>
-            Describe the job, identify the exact materials, compare connected
-            supplier prices, then add labour, markup and GST to build the
-            customer quote.
+            Describe the job, let AI build
+            the material take-off, find
+            suitable products from Australian
+            suppliers, then add labour,
+            markup and GST.
           </p>
         </div>
       </section>
 
-      <main id="builder" className="wrap section">
-        <h2 style={{ fontSize: 34 }}>Price your next job.</h2>
+      <main
+        id="builder"
+        className="wrap section"
+      >
+        <h2 style={{ fontSize: 34 }}>
+          Price your next job.
+        </h2>
 
         <div className="grid">
           <form onSubmit={quote}>
 
             {/* JOB DETAILS */}
+
             <div className="card">
               <h3>
-                <span className="step">1</span>
+                <span className="step">
+                  1
+                </span>
                 &nbsp; Job details
               </h3>
 
@@ -214,21 +358,34 @@ export default function Home() {
                 <select
                   className="field"
                   value={trade}
-                  onChange={e => setTrade(e.target.value)}
+                  onChange={e =>
+                    setTrade(e.target.value)
+                  }
                 >
                   {trades.map(x => (
-                    <option key={x}>{x}</option>
+                    <option key={x}>
+                      {x}
+                    </option>
                   ))}
                 </select>
               </label>
 
               <div className="hint">
-                <b>💡 Help the AI find the right materials</b>
+                <b>
+                  💡 Describe the job naturally
+                </b>
+
                 <br />
-                Describe what you need and include sizes, quantities, brands or
-                other specifications when you know them. If you don't specify a
-                brand or style, the system can later show suitable product
-                varieties for you to choose from.
+
+                You don't need to choose a
+                brand or model unless you
+                already know exactly what you
+                want. Include measurements,
+                quantities and important
+                specifications where known.
+                The AI will create the
+                material take-off and product
+                search terms.
               </div>
 
               <label>
@@ -238,14 +395,20 @@ export default function Home() {
                   className="field"
                   rows="5"
                   value={desc}
-                  onChange={e => setDesc(e.target.value)}
-                  placeholder={tradeHelp[trade]}
+                  onChange={e =>
+                    setDesc(e.target.value)
+                  }
+                  placeholder={
+                    tradeHelp[trade]
+                  }
                 />
               </label>
 
               <div
                 className="two"
-                style={{ marginTop: 12 }}
+                style={{
+                  marginTop: 12
+                }}
               >
                 <label>
                   Quantity / area
@@ -254,7 +417,11 @@ export default function Home() {
                     className="field"
                     type="number"
                     value={qty}
-                    onChange={e => setQty(e.target.value)}
+                    onChange={e =>
+                      setQty(
+                        e.target.value
+                      )
+                    }
                   />
                 </label>
 
@@ -264,7 +431,11 @@ export default function Home() {
                   <input
                     className="field"
                     value={suburb}
-                    onChange={e => setSuburb(e.target.value)}
+                    onChange={e =>
+                      setSuburb(
+                        e.target.value
+                      )
+                    }
                   />
                 </label>
               </div>
@@ -275,84 +446,143 @@ export default function Home() {
                   marginTop: 16,
                   width: '100%'
                 }}
+                disabled={loading}
               >
                 {loading
-                  ? 'Finding materials…'
-                  : 'Find Materials & Compare Suppliers'}
+                  ? 'Building material take-off…'
+                  : 'Build Material Take-Off'}
               </button>
 
               {error && (
                 <div
                   className="warning"
-                  style={{ marginTop: 12 }}
+                  style={{
+                    marginTop: 12
+                  }}
                 >
-                  <b>Could not build material list</b>
+                  <b>
+                    Could not build material
+                    list
+                  </b>
+
                   <br />
+
                   {error}
                 </div>
               )}
             </div>
 
             {/* AI MATERIAL TAKE-OFF */}
+
             {result && (
               <div className="card">
                 <h3>
-                  <span className="step">2</span>
+                  <span className="step">
+                    2
+                  </span>
                   &nbsp;
-                  {result.mode === 'ai_takeoff'
+
+                  {result.mode ===
+                  'ai_takeoff'
                     ? 'AI Material Take-Off'
                     : 'Matched Products'}
                 </h3>
 
                 {result.summary && (
-                  <p>{result.summary}</p>
+                  <p>
+                    {result.summary}
+                  </p>
                 )}
 
-                {result.items.map((x, i) => (
-                  <div
-                    className={
-                      'supplier ' + (i === 0 ? 'best' : '')
-                    }
-                    key={i}
-                  >
-                    <div>
-                      <b>{x.product}</b>
+                {result.items?.map(
+                  (x, i) => (
+                    <div
+                      className="supplier"
+                      key={`${x.product}-${i}`}
+                      style={{
+                        display: 'block'
+                      }}
+                    >
+                      <div
+                        style={{
+                          display: 'flex',
+                          justifyContent:
+                            'space-between',
+                          gap: 12,
+                          alignItems:
+                            'flex-start'
+                        }}
+                      >
+                        <div>
+                          <b>
+                            {x.product}
+                          </b>
 
-                      <div className="status">
-                        {x.supplier} • {x.sku} • {x.matchStatus}
+                          <div className="status">
+                            Qty {x.qty}{' '}
+                            {x.unit ||
+                              'each'}
+
+                            {x.category
+                              ? ` • ${x.category}`
+                              : ''}
+                          </div>
+
+                          <div className="status">
+                            {x.matchStatus}
+                          </div>
+                        </div>
+
+                        <b>
+                          {money(
+                            x.total
+                          )}
+                        </b>
                       </div>
+
+                      <ProductFinder
+                        item={x}
+                      />
                     </div>
+                  )
+                )}
 
-                    <b>{money(x.total)}</b>
-                  </div>
-                ))}
-
-                {result.questions?.length > 0 && (
+                {result.questions
+                  ?.length > 0 && (
                   <div
                     className="hint"
-                    style={{ marginTop: 12 }}
+                    style={{
+                      marginTop: 12
+                    }}
                   >
                     <b>
-                      Additional information that may help product matching
+                      Additional information
+                      that may help product
+                      matching
                     </b>
 
                     <br />
 
-                    {result.questions.map((q, i) => (
-                      <div key={i}>• {q}</div>
-                    ))}
+                    {result.questions.map(
+                      (q, i) => (
+                        <div key={i}>
+                          • {q}
+                        </div>
+                      )
+                    )}
                   </div>
                 )}
               </div>
             )}
 
-            {/* LABOUR & PROFIT */}
+            {/* LABOUR */}
+
             <div className="card">
               <h3>
                 <span className="step">
                   {result ? '3' : '2'}
                 </span>
-                &nbsp; Labour & Profit
+                &nbsp; Labour &amp; Profit
               </h3>
 
               <div className="two">
@@ -362,10 +592,19 @@ export default function Home() {
                   <select
                     className="field"
                     value={labType}
-                    onChange={e => setLabType(e.target.value)}
+                    onChange={e =>
+                      setLabType(
+                        e.target.value
+                      )
+                    }
                   >
-                    <option value="hourly">Hourly</option>
-                    <option value="fixed">Fixed cost</option>
+                    <option value="hourly">
+                      Hourly
+                    </option>
+
+                    <option value="fixed">
+                      Fixed cost
+                    </option>
                   </select>
                 </label>
 
@@ -379,7 +618,10 @@ export default function Home() {
                         type="number"
                         value={rate}
                         onChange={e =>
-                          setRate(+e.target.value)
+                          setRate(
+                            +e.target
+                              .value
+                          )
                         }
                       />
                     </label>
@@ -392,7 +634,10 @@ export default function Home() {
                         type="number"
                         value={hours}
                         onChange={e =>
-                          setHours(+e.target.value)
+                          setHours(
+                            +e.target
+                              .value
+                          )
                         }
                       />
                     </label>
@@ -406,7 +651,9 @@ export default function Home() {
                       type="number"
                       value={fixed}
                       onChange={e =>
-                        setFixed(+e.target.value)
+                        setFixed(
+                          +e.target.value
+                        )
                       }
                     />
                   </label>
@@ -420,7 +667,9 @@ export default function Home() {
                     type="number"
                     value={matMarkup}
                     onChange={e =>
-                      setMatMarkup(+e.target.value)
+                      setMatMarkup(
+                        +e.target.value
+                      )
                     }
                   />
                 </label>
@@ -433,7 +682,9 @@ export default function Home() {
                     type="number"
                     value={labMarkup}
                     onChange={e =>
-                      setLabMarkup(+e.target.value)
+                      setLabMarkup(
+                        +e.target.value
+                      )
                     }
                   />
                 </label>
@@ -446,7 +697,9 @@ export default function Home() {
                     type="number"
                     value={other}
                     onChange={e =>
-                      setOther(+e.target.value)
+                      setOther(
+                        +e.target.value
+                      )
                     }
                   />
                 </label>
@@ -458,11 +711,18 @@ export default function Home() {
                     className="field"
                     value={gst}
                     onChange={e =>
-                      setGst(+e.target.value)
+                      setGst(
+                        +e.target.value
+                      )
                     }
                   >
-                    <option value="10">10%</option>
-                    <option value="0">No GST</option>
+                    <option value="10">
+                      10%
+                    </option>
+
+                    <option value="0">
+                      No GST
+                    </option>
                   </select>
                 </label>
               </div>
@@ -470,6 +730,7 @@ export default function Home() {
           </form>
 
           {/* CUSTOMER QUOTE */}
+
           <aside>
             <div className="quote">
               <div className="muted">
@@ -479,38 +740,75 @@ export default function Home() {
               <h2>{trade}</h2>
 
               <div className="row">
-                <span>Materials</span>
-                <b>{money(totals.materials)}</b>
+                <span>
+                  Materials
+                </span>
+
+                <b>
+                  {money(
+                    totals.materials
+                  )}
+                </b>
               </div>
 
               <div className="row">
-                <span>Materials markup</span>
-                <b>{money(totals.mm)}</b>
+                <span>
+                  Materials markup
+                </span>
+
+                <b>
+                  {money(totals.mm)}
+                </b>
               </div>
 
               <div className="row">
-                <span>Labour</span>
-                <b>{money(labour)}</b>
+                <span>
+                  Labour
+                </span>
+
+                <b>
+                  {money(labour)}
+                </b>
               </div>
 
               <div className="row">
-                <span>Labour markup</span>
-                <b>{money(totals.lm)}</b>
+                <span>
+                  Labour markup
+                </span>
+
+                <b>
+                  {money(totals.lm)}
+                </b>
               </div>
 
               <div className="row">
-                <span>Other</span>
-                <b>{money(other)}</b>
+                <span>
+                  Other
+                </span>
+
+                <b>
+                  {money(other)}
+                </b>
               </div>
 
               <div className="row">
-                <span>Subtotal</span>
-                <b>{money(totals.sub)}</b>
+                <span>
+                  Subtotal
+                </span>
+
+                <b>
+                  {money(totals.sub)}
+                </b>
               </div>
 
               <div className="row">
-                <span>GST</span>
-                <b>{money(totals.g)}</b>
+                <span>
+                  GST
+                </span>
+
+                <b>
+                  {money(totals.g)}
+                </b>
               </div>
 
               <div className="total">
@@ -519,23 +817,27 @@ export default function Home() {
                 </div>
 
                 <strong>
-                  {money(totals.total)}
+                  {money(
+                    totals.total
+                  )}
                 </strong>
               </div>
 
               <div className="warning">
                 <b>
-                  {result?.mode === 'live'
+                  {result?.mode ===
+                  'live'
                     ? 'LIVE PRICING'
-                    : result?.mode === 'ai_takeoff'
+                    : result?.mode ===
+                      'ai_takeoff'
                     ? 'AI MATERIAL TAKE-OFF — PRICING NOT CONNECTED'
-                    : 'DEMO / UNVERIFIED PRICING'}
+                    : 'PRICING NOT CONNECTED'}
                 </b>
 
                 <br />
 
                 {result?.message ||
-                  'Run product matching to build the materials cost. Only authorised supplier responses should be treated as live/exact.'}
+                  'Build the material take-off, then use Find Product Options to check supplier catalogues. Website prices must be verified before being treated as current.'}
               </div>
             </div>
           </aside>
