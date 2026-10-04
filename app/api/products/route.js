@@ -19,13 +19,31 @@ const SUPPLIERS = [
   }
 ];
 
+function cleanText(value = '') {
+  return String(value)
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function cleanTitle(title = '') {
+  return cleanText(title)
+    .replace(/\s*\|\s*Bunnings.*$/i, '')
+    .replace(/\s*\|\s*Mitre\s*10.*$/i, '')
+    .replace(/\s*\|\s*Bowens.*$/i, '')
+    .replace(/\s*\|\s*Reece.*$/i, '')
+    .replace(/\s*-\s*Bunnings.*$/i, '')
+    .replace(/\s*-\s*Mitre\s*10.*$/i, '')
+    .replace(/\s*-\s*Bowens.*$/i, '')
+    .replace(/\s*-\s*Reece.*$/i, '')
+    .trim();
+}
+
 function normaliseUrl(url = '') {
   try {
     const parsed = new URL(url);
 
     parsed.hash = '';
 
-    // Remove common tracking parameters.
     [
       'utm_source',
       'utm_medium',
@@ -43,134 +61,248 @@ function normaliseUrl(url = '') {
   }
 }
 
-function decodeHtml(value = '') {
-  return String(value)
-    .replace(/&quot;/g, '"')
-    .replace(/&#34;/g, '"')
-    .replace(/&#39;/g, "'")
-    .replace(/&amp;/g, '&')
-    .replace(/&lt;/g, '<')
-    .replace(/&gt;/g, '>')
-    .replace(/&nbsp;/g, ' ');
-}
-
-function stripHtml(value = '') {
-  return decodeHtml(
-    String(value).replace(/<[^>]*>/g, ' ')
-  )
-    .replace(/\s+/g, ' ')
-    .trim();
-}
-
-function isProbablyNonProductPage(
-  title = '',
-  url = ''
-) {
+function isBadPage(title = '', url = '', snippet = '') {
   const text =
-    `${title} ${url}`.toLowerCase();
+    `${title} ${url} ${snippet}`.toLowerCase();
 
-  const badTerms = [
+  const badPhrases = [
     'how to',
     'how-to',
-    'guide',
-    'advice',
-    'ideas',
-    'inspiration',
-    'blog',
-    '/blog/',
-    '/category/',
-    '/categories/',
-    '/search/',
-    '/search?',
-    'search results',
     'buying guide',
     'project guide',
     'diy advice',
-    'catalogue',
-    'catalog/',
+    'ideas & advice',
+    'ideas and advice',
+    'inspiration',
+    'shop our range',
+    'browse our range',
+    'view our range',
     'range of ',
-    'shop our range'
+    'search results',
+    'catalogue',
+    'catalog ',
+    'all products',
+    'products |',
+    'products -'
   ];
 
-  return badTerms.some(term =>
-    text.includes(term)
-  );
+  const badUrlParts = [
+    '/search',
+    '/category',
+    '/categories',
+    '/blog',
+    '/advice',
+    '/ideas',
+    '/inspiration',
+    '/how-to',
+    '/howto'
+  ];
+
+  if (
+    badPhrases.some(phrase =>
+      text.includes(phrase)
+    )
+  ) {
+    return true;
+  }
+
+  if (
+    badUrlParts.some(part =>
+      url.toLowerCase().includes(part)
+    )
+  ) {
+    return true;
+  }
+
+  return false;
 }
 
-function isLikelyBunningsProduct(url = '') {
+function looksLikeBunningsProduct(url = '') {
+  // Individual Bunnings product URLs commonly
+  // end with an item code such as _p0123456.
   return /_p\d+/i.test(url);
 }
 
-function isLikelyProductResult(
+function looksLikeIndividualProduct(
   supplier,
   result
 ) {
   const title =
-    String(result?.title || '');
+    cleanTitle(result?.title || '');
 
-  const link =
+  const url =
     normaliseUrl(result?.link || '');
 
-  if (!title || !link) {
+  const snippet =
+    cleanText(result?.snippet || '');
+
+  if (!title || !url) {
     return false;
   }
 
   if (
-    !link
+    !url
       .toLowerCase()
-      .includes(supplier.domain)
+      .includes(
+        supplier.domain
+      )
   ) {
     return false;
   }
 
   if (
-    isProbablyNonProductPage(
+    isBadPage(
       title,
-      link
+      url,
+      snippet
     )
   ) {
     return false;
   }
 
-  // Bunnings individual product URLs normally
-  // contain an item number such as _p0123456.
   if (
     supplier.name === 'Bunnings'
   ) {
-    return isLikelyBunningsProduct(
-      link
+    return looksLikeBunningsProduct(
+      url
     );
   }
 
   return true;
 }
 
-async function serperSearch(
-  query
+function getPrices(text = '') {
+  const cleaned =
+    cleanText(text)
+      .replace(/,/g, '');
+
+  const matches = [
+    ...cleaned.matchAll(
+      /\$\s*([0-9]+(?:\.[0-9]{1,2})?)/g
+    )
+  ];
+
+  return matches
+    .map(match =>
+      Number(match[1])
+    )
+    .filter(
+      price =>
+        Number.isFinite(price) &&
+        price > 0 &&
+        price < 100000
+    );
+}
+
+function choosePrice(result) {
+  /*
+    Prefer a price appearing in the title.
+
+    If the title has no price, only use the
+    snippet when there is exactly ONE dollar
+    amount.
+
+    This prevents the old problem where a
+    category page containing "$17.98,
+    $19.98, $29.98..." accidentally became
+    a $17 product.
+  */
+
+  const titlePrices =
+    getPrices(
+      result?.title || ''
+    );
+
+  if (
+    titlePrices.length === 1
+  ) {
+    return titlePrices[0];
+  }
+
+  const snippetPrices =
+    getPrices(
+      result?.snippet || ''
+    );
+
+  if (
+    snippetPrices.length === 1
+  ) {
+    return snippetPrices[0];
+  }
+
+  return null;
+}
+
+function getSkuFromBunningsUrl(
+  url = ''
 ) {
-  const response = await fetch(
-    'https://google.serper.dev/search',
-    {
-      method: 'POST',
+  const match =
+    url.match(
+      /_p(\d+)/i
+    );
 
-      headers: {
-        'X-API-KEY':
-          process.env.SERPER_API_KEY,
+  if (!match) {
+    return 'Not listed';
+  }
 
-        'Content-Type':
-          'application/json'
-      },
+  return `P${match[1]}`;
+}
 
-      body: JSON.stringify({
-        q: query,
-        gl: 'au',
-        hl: 'en',
-        num: 10
-      }),
+function getSku(
+  supplier,
+  url
+) {
+  if (
+    supplier === 'Bunnings'
+  ) {
+    return getSkuFromBunningsUrl(
+      url
+    );
+  }
 
-      cache: 'no-store'
-    }
-  );
+  return 'Not listed';
+}
+
+function makeId(
+  supplier,
+  url
+) {
+  return `${supplier}-${url}`
+    .replace(
+      /[^a-zA-Z0-9]/g,
+      ''
+    )
+    .slice(0, 100);
+}
+
+async function searchSerper(
+  q
+) {
+  const response =
+    await fetch(
+      'https://google.serper.dev/search',
+      {
+        method: 'POST',
+
+        headers: {
+          'X-API-KEY':
+            process.env
+              .SERPER_API_KEY,
+
+          'Content-Type':
+            'application/json'
+        },
+
+        body: JSON.stringify({
+          q,
+          gl: 'au',
+          hl: 'en',
+          num: 10
+        }),
+
+        cache: 'no-store'
+      }
+    );
 
   if (!response.ok) {
     const body =
@@ -182,49 +314,53 @@ async function serperSearch(
       body
     );
 
-    throw new Error(
-      `Serper returned ${response.status}`
-    );
+    return null;
   }
 
   return response.json();
 }
 
-async function discoverProductUrls(
+async function searchSupplier(
   supplier,
   query
 ) {
-  const searches = [
-    `site:${supplier.domain} "${query}" product`,
-    `site:${supplier.domain} ${query}`
-  ];
+  /*
+    These search phrases deliberately push
+    Google toward individual product pages.
+  */
 
-  const urls = [];
+  const searches =
+    supplier.name === 'Bunnings'
+      ? [
+          `site:bunnings.com.au "${query}" _p`,
+          `site:bunnings.com.au ${query} price`
+        ]
+      : [
+          `site:${supplier.domain} "${query}" price`,
+          `site:${supplier.domain} ${query} product`
+        ];
+
+  const results = [];
   const seen = new Set();
 
-  for (const search of searches) {
-    let data;
-
-    try {
-      data =
-        await serperSearch(search);
-    } catch (error) {
-      console.error(
-        `${supplier.name} discovery failed:`,
-        error
+  for (const searchQuery of searches) {
+    const data =
+      await searchSerper(
+        searchQuery
       );
 
+    if (!data) {
       continue;
     }
 
     const organic =
-      Array.isArray(data?.organic)
+      Array.isArray(data.organic)
         ? data.organic
         : [];
 
     for (const result of organic) {
       if (
-        !isLikelyProductResult(
+        !looksLikeIndividualProduct(
           supplier,
           result
         )
@@ -244,611 +380,77 @@ async function discoverProductUrls(
         continue;
       }
 
+      const price =
+        choosePrice(result);
+
+      /*
+        Don't show a selectable product unless
+        Serper gave us one unambiguous price.
+      */
+      if (!price) {
+        continue;
+      }
+
+      const name =
+        cleanTitle(
+          result.title
+        );
+
+      if (!name) {
+        continue;
+      }
+
       seen.add(url);
 
-      urls.push({
+      results.push({
+        id: makeId(
+          supplier.name,
+          url
+        ),
+
         supplier:
           supplier.name,
 
+        name,
+
+        sku: getSku(
+          supplier.name,
+          url
+        ),
+
+        price,
+
+        unit: 'each',
+
         url,
 
-        searchTitle:
-          String(
-            result.title || ''
-          ),
-
-        searchSnippet:
-          String(
+        description:
+          cleanText(
             result.snippet || ''
-          )
+          ).slice(0, 300),
+
+        priceType:
+          'search-result',
+
+        checkedAt:
+          new Date().toISOString()
       });
 
-      // Don't hammer supplier sites.
-      // A few candidate pages per supplier
-      // is enough for the product picker.
-      if (urls.length >= 5) {
+      if (
+        results.length >= 5
+      ) {
         break;
       }
     }
 
-    if (urls.length >= 3) {
+    if (
+      results.length >= 3
+    ) {
       break;
     }
   }
 
-  return urls;
-}
-
-function findJsonLdBlocks(
-  html = ''
-) {
-  const blocks = [];
-
-  const regex =
-    /<script[^>]+type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi;
-
-  let match;
-
-  while (
-    (match = regex.exec(html))
-  ) {
-    const raw =
-      decodeHtml(
-        match[1] || ''
-      ).trim();
-
-    if (!raw) continue;
-
-    try {
-      blocks.push(
-        JSON.parse(raw)
-      );
-    } catch {
-      // Some websites output malformed JSON-LD.
-      // Ignore it rather than inventing data.
-    }
-  }
-
-  return blocks;
-}
-
-function collectObjects(
-  value,
-  output = []
-) {
-  if (!value) {
-    return output;
-  }
-
-  if (Array.isArray(value)) {
-    value.forEach(item =>
-      collectObjects(
-        item,
-        output
-      )
-    );
-
-    return output;
-  }
-
-  if (
-    typeof value === 'object'
-  ) {
-    output.push(value);
-
-    if (
-      Array.isArray(value['@graph'])
-    ) {
-      collectObjects(
-        value['@graph'],
-        output
-      );
-    }
-
-    for (
-      const child of
-      Object.values(value)
-    ) {
-      if (
-        child &&
-        typeof child === 'object'
-      ) {
-        collectObjects(
-          child,
-          output
-        );
-      }
-    }
-  }
-
-  return output;
-}
-
-function isProductSchema(
-  object
-) {
-  const type =
-    object?.['@type'];
-
-  if (Array.isArray(type)) {
-    return type.some(
-      x =>
-        String(x).toLowerCase() ===
-        'product'
-    );
-  }
-
-  return (
-    String(type || '')
-      .toLowerCase() ===
-    'product'
-  );
-}
-
-function getOfferObjects(
-  offers
-) {
-  if (!offers) {
-    return [];
-  }
-
-  if (Array.isArray(offers)) {
-    return offers;
-  }
-
-  if (
-    typeof offers === 'object'
-  ) {
-    return [offers];
-  }
-
-  return [];
-}
-
-function getPriceFromOffer(
-  offer
-) {
-  if (!offer) {
-    return null;
-  }
-
-  const candidates = [
-    offer.price,
-    offer.lowPrice,
-    offer.highPrice,
-
-    offer?.priceSpecification
-      ?.price
-  ];
-
-  for (const candidate of candidates) {
-    const price =
-      Number(
-        String(
-          candidate ?? ''
-        )
-          .replace(/[^0-9.]/g, '')
-      );
-
-    if (
-      Number.isFinite(price) &&
-      price > 0
-    ) {
-      return price;
-    }
-  }
-
-  return null;
-}
-
-function getPriceFromProduct(
-  product
-) {
-  const offers =
-    getOfferObjects(
-      product?.offers
-    );
-
-  for (const offer of offers) {
-    const price =
-      getPriceFromOffer(
-        offer
-      );
-
-    if (price) {
-      return price;
-    }
-  }
-
-  return null;
-}
-
-function getSku(product) {
-  return String(
-    product?.sku ||
-      product?.mpn ||
-      product?.productID ||
-      'Not listed'
-  ).trim();
-}
-
-function getDescription(
-  product
-) {
-  return stripHtml(
-    product?.description ||
-      ''
-  ).slice(0, 300);
-}
-
-function getUnit(
-  product
-) {
-  const text =
-    `${product?.name || ''} ${
-      product?.description || ''
-    }`.toLowerCase();
-
-  if (
-    text.includes(
-      'per linear metre'
-    ) ||
-    text.includes('/lm')
-  ) {
-    return 'linear metre';
-  }
-
-  if (
-    text.includes(
-      'per metre'
-    ) ||
-    text.includes('/m')
-  ) {
-    return 'metre';
-  }
-
-  if (
-    text.includes(
-      'per sheet'
-    )
-  ) {
-    return 'sheet';
-  }
-
-  if (
-    text.includes(
-      'per pack'
-    )
-  ) {
-    return 'pack';
-  }
-
-  if (
-    text.includes(
-      'per box'
-    ) ||
-    text.includes('/bx')
-  ) {
-    return 'box';
-  }
-
-  return 'each';
-}
-
-function makeId(
-  supplier,
-  sku,
-  url
-) {
-  const safe =
-    `${supplier}-${sku}-${url}`
-      .replace(
-        /[^a-zA-Z0-9]/g,
-        ''
-      )
-      .slice(0, 90);
-
-  return safe ||
-    `${supplier}-${Date.now()}`;
-}
-
-function productFromJsonLd(
-  supplier,
-  url,
-  html
-) {
-  const blocks =
-    findJsonLdBlocks(html);
-
-  const objects = [];
-
-  blocks.forEach(block =>
-    collectObjects(
-      block,
-      objects
-    )
-  );
-
-  const products =
-    objects.filter(
-      isProductSchema
-    );
-
-  for (const product of products) {
-    const name =
-      stripHtml(
-        product?.name || ''
-      );
-
-    const price =
-      getPriceFromProduct(
-        product
-      );
-
-    if (
-      !name ||
-      !price
-    ) {
-      continue;
-    }
-
-    const sku =
-      getSku(product);
-
-    return {
-      id: makeId(
-        supplier,
-        sku,
-        url
-      ),
-
-      supplier,
-
-      name,
-
-      sku,
-
-      price,
-
-      unit:
-        getUnit(product),
-
-      url,
-
-      description:
-        getDescription(product),
-
-      priceType:
-        'verified-page',
-
-      checkedAt:
-        new Date().toISOString()
-    };
-  }
-
-  return null;
-}
-
-function getMetaContent(
-  html,
-  property
-) {
-  const escaped =
-    property.replace(
-      /[.*+?^${}()|[\]\\]/g,
-      '\\$&'
-    );
-
-  const patterns = [
-    new RegExp(
-      `<meta[^>]+property=["']${escaped}["'][^>]+content=["']([^"']+)["'][^>]*>`,
-      'i'
-    ),
-
-    new RegExp(
-      `<meta[^>]+content=["']([^"']+)["'][^>]+property=["']${escaped}["'][^>]*>`,
-      'i'
-    ),
-
-    new RegExp(
-      `<meta[^>]+name=["']${escaped}["'][^>]+content=["']([^"']+)["'][^>]*>`,
-      'i'
-    ),
-
-    new RegExp(
-      `<meta[^>]+content=["']([^"']+)["'][^>]+name=["']${escaped}["'][^>]*>`,
-      'i'
-    )
-  ];
-
-  for (const pattern of patterns) {
-    const match =
-      html.match(pattern);
-
-    if (match?.[1]) {
-      return decodeHtml(
-        match[1]
-      ).trim();
-    }
-  }
-
-  return '';
-}
-
-function productFromMeta(
-  supplier,
-  url,
-  html
-) {
-  const name =
-    getMetaContent(
-      html,
-      'og:title'
-    );
-
-  const rawPrice =
-    getMetaContent(
-      html,
-      'product:price:amount'
-    ) ||
-    getMetaContent(
-      html,
-      'og:price:amount'
-    );
-
-  const price =
-    Number(
-      String(rawPrice)
-        .replace(
-          /[^0-9.]/g,
-          ''
-        )
-    );
-
-  if (
-    !name ||
-    !Number.isFinite(price) ||
-    price <= 0
-  ) {
-    return null;
-  }
-
-  const description =
-    getMetaContent(
-      html,
-      'description'
-    ) ||
-    getMetaContent(
-      html,
-      'og:description'
-    );
-
-  return {
-    id: makeId(
-      supplier,
-      'meta',
-      url
-    ),
-
-    supplier,
-
-    name:
-      stripHtml(name),
-
-    sku:
-      'Not listed',
-
-    price,
-
-    unit:
-      'each',
-
-    url,
-
-    description:
-      stripHtml(
-        description
-      ).slice(0, 300),
-
-    priceType:
-      'verified-page',
-
-    checkedAt:
-      new Date().toISOString()
-  };
-}
-
-async function verifyProductPage(
-  candidate
-) {
-  try {
-    const response =
-      await fetch(
-        candidate.url,
-        {
-          headers: {
-            'User-Agent':
-              'Mozilla/5.0 (compatible; TradieToolkitAU/1.0)',
-
-            Accept:
-              'text/html,application/xhtml+xml'
-          },
-
-          cache: 'no-store',
-
-          signal:
-            AbortSignal.timeout(
-              8000
-            )
-        }
-      );
-
-    if (!response.ok) {
-      return null;
-    }
-
-    const contentType =
-      response.headers.get(
-        'content-type'
-      ) || '';
-
-    if (
-      !contentType.includes(
-        'text/html'
-      )
-    ) {
-      return null;
-    }
-
-    const html =
-      await response.text();
-
-    if (
-      !html ||
-      html.length < 500
-    ) {
-      return null;
-    }
-
-    // First preference:
-    // actual Product structured data.
-    const structured =
-      productFromJsonLd(
-        candidate.supplier,
-        candidate.url,
-        html
-      );
-
-    if (structured) {
-      return structured;
-    }
-
-    // Second preference:
-    // explicit product price meta tags.
-    const meta =
-      productFromMeta(
-        candidate.supplier,
-        candidate.url,
-        html
-      );
-
-    if (meta) {
-      return meta;
-    }
-
-    // Important:
-    // We deliberately DO NOT extract
-    // random "$XX" text from the page.
-    return null;
-  } catch (error) {
-    console.error(
-      'Product verification failed:',
-      candidate.url,
-      error?.message
-    );
-
-    return null;
-  }
+  return results;
 }
 
 function dedupeProducts(
@@ -860,7 +462,7 @@ function dedupeProducts(
   return products.filter(
     product => {
       const key =
-        `${product.supplier}|${product.url}`;
+        product.url;
 
       if (
         seen.has(key)
@@ -898,9 +500,9 @@ export async function POST(
       await request.json();
 
     const query =
-      String(
+      cleanText(
         body?.query || ''
-      ).trim();
+      );
 
     if (!query) {
       return NextResponse.json(
@@ -914,58 +516,27 @@ export async function POST(
       );
     }
 
-    /*
-      STEP 1:
-      Use Serper only to discover
-      likely individual supplier
-      product pages.
-    */
-
-    const discovery =
+    const searches =
       await Promise.all(
         SUPPLIERS.map(
           supplier =>
-            discoverProductUrls(
+            searchSupplier(
               supplier,
               query
             )
         )
       );
 
-    const candidates =
-      discovery
-        .flat()
-        .slice(0, 16);
-
-    /*
-      STEP 2:
-      Visit those pages and verify
-      actual product structured data.
-
-      Search snippets are NOT used
-      as the price.
-    */
-
-    const verified =
-      await Promise.all(
-        candidates.map(
-          candidate =>
-            verifyProductPage(
-              candidate
-            )
-        )
-      );
-
     const products =
       dedupeProducts(
-        verified.filter(Boolean)
+        searches.flat()
       )
         .sort(
           (a, b) =>
             a.price -
             b.price
         )
-        .slice(0, 12);
+        .slice(0, 16);
 
     return NextResponse.json({
       query,
@@ -978,16 +549,10 @@ export async function POST(
             supplier.name
         ),
 
-      candidatesChecked:
-        candidates.length,
-
-      verifiedProducts:
-        products.length,
-
       message:
         products.length > 0
-          ? `${products.length} verified product options found.`
-          : 'Product pages were searched, but no individual products with a verifiable public price were found.',
+          ? `${products.length} individual product options found.`
+          : 'No individual supplier products with an unambiguous public price were found.',
 
       checkedAt:
         new Date().toISOString()
