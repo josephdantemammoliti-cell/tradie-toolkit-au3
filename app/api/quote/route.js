@@ -41,44 +41,78 @@ Job suburb: ${body.suburb || ''}
 Create a practical material take-off for this job. Use Australian trade terminology and metric measurements. Extract exact brands, sizes, colours, finishes and product types when the user supplies them. Do not invent brands, supplier SKUs, supplier prices or exact product models. If an important specification is missing, keep the material generic and set needsConfirmation=true. Include normal consumables only when they are reasonably required by the described work. Do not include labour.
 
 Return JSON only, matching the supplied schema.`;
+const sleep = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 
-    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(MODEL)}:generateContent`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-goog-api-key': apiKey,
-      },
-      body: JSON.stringify({
-        contents: [{parts: [{text: prompt}]}],
-        generationConfig: {
-          temperature: 0.2,
-          responseMimeType: 'application/json',
-          responseJsonSchema: {
-            type: 'object',
-            properties: {
-              summary: {type:'string'},
-              materials: {
-                type:'array',
-                items: {
-                  type:'object',
-                  properties: {
-                    material:{type:'string'},
-                    category:{type:'string'},
-                    quantity:{type:'number'},
-                    unit:{type:'string'},
-                    specification:{type:'string'},
-                    needsConfirmation:{type:'boolean'}
-                  },
-                  required:['material','quantity','unit','specification','needsConfirmation']
+async function callGemini() {
+  let lastResponse;
+
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    lastResponse = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(MODEL)}:generateContent`,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-goog-api-key': apiKey,
+        },
+        body: JSON.stringify({
+          contents: [{ parts: [{ text: prompt }] }],
+          generationConfig: {
+            temperature: 0.2,
+            responseMimeType: 'application/json',
+            responseJsonSchema: {
+              type: 'object',
+              properties: {
+                summary: { type: 'string' },
+                materials: {
+                  type: 'array',
+                  items: {
+                    type: 'object',
+                    properties: {
+                      material: { type: 'string' },
+                      category: { type: 'string' },
+                      quantity: { type: 'number' },
+                      unit: { type: 'string' },
+                      specification: { type: 'string' },
+                      needsConfirmation: { type: 'boolean' }
+                    },
+                    required: [
+                      'material',
+                      'quantity',
+                      'unit',
+                      'specification',
+                      'needsConfirmation'
+                    ]
+                  }
+                },
+                questions: {
+                  type: 'array',
+                  items: { type: 'string' }
                 }
               },
-              questions:{type:'array',items:{type:'string'}}
-            },
-            required:['summary','materials','questions']
+              required: ['summary', 'materials', 'questions']
+            }
           }
-        }
-      })
-    });
+        })
+      }
+    );
+
+    if (lastResponse.status !== 503 && lastResponse.status !== 429) {
+      return lastResponse;
+    }
+
+    console.log(`Gemini busy - retry ${attempt}/3`);
+
+    if (attempt < 3) {
+      await sleep(attempt * 1500);
+    }
+  }
+
+  return lastResponse;
+}
+
+const response = await callGemini();
+   
 
     const data = await response.json();
     if (!response.ok) {
