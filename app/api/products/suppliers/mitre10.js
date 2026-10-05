@@ -118,20 +118,43 @@ async function verifyMitre10Product(url) {
 
   console.log("Mitre 10 fetching product page:", url);
 
-  const response = await fetch(url, {
+let response;
+
+try {
+  response = await fetch(url, {
     headers: {
-      Accept: "text/html",
+      Accept:
+        "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
       "User-Agent":
-        "Mozilla/5.0 TradieToolkitAU/1.0",
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/151.0.0.0 Safari/537.36",
+      "Accept-Language": "en-AU,en;q=0.9",
     },
+    redirect: "follow",
     cache: "no-store",
   });
+} catch (error) {
+  console.log("Mitre 10 fetch network error:", {
+    url,
+    error: error?.message || String(error),
+  });
 
-  if (!response.ok) {
-    return null;
-  }
+  return null;
+}
 
-  const html = await response.text();
+console.log("Mitre 10 HTTP response:", {
+  url,
+  status: response.status,
+  ok: response.ok,
+  redirected: response.redirected,
+  finalUrl: response.url,
+  contentType: response.headers.get("content-type"),
+});
+
+if (!response.ok) {
+  return null;
+}
+
+const html = await response.text();
 console.log("Mitre 10 page fetch:", {
   url,
   status: response.status,
