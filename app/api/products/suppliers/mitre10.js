@@ -114,7 +114,17 @@ async function verifyMitre10Product(url) {
   }
 
   const html = await response.text();
-
+console.log("Mitre 10 page fetch:", {
+  url,
+  status: response.status,
+  htmlLength: html.length,
+  hasJsonLd: html.includes("application/ld+json"),
+  hasProductText: html.includes('"Product"'),
+  title:
+    html.match(/<title[^>]*>([\s\S]*?)<\/title>/i)?.[1]
+      ?.replace(/\s+/g, " ")
+      .trim() || null,
+});
   const blocks = extractJsonLd(html);
   const product = findProductJsonLd(blocks);
 
