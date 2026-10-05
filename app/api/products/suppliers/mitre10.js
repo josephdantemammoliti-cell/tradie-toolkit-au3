@@ -173,35 +173,67 @@ async function verifyMitre10Product(url) {
       : "Product page verified. No reliable web price found.",
   };
 }
+async function discoverMitre10Urls(query) {
+  const apiKey = process.env.SERPER_API_KEY;
 
+  if (!apiKey) {
+    console.error("SERPER_API_KEY is missing.");
+    return [];
+  }
+
+  const response = await fetch(
+    "https://google.serper.dev/search",
+    {
+      method: "POST",
+      headers: {
+        "X-API-KEY": apiKey,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        q: `site:mitre10.com.au ${query}`,
+        gl: "au",
+        hl: "en",
+        num: 10,
+      }),
+      cache: "no-store",
+    }
+  );
+
+  if (!response.ok) {
+    console.error(
+      "Mitre 10 discovery failed:",
+      response.status
+    );
+    return [];
+  }
+
+  const data = await response.json();
+
+  const urls = (data?.organic || [])
+    .map((result) => result?.link)
+    .filter(
+      (url) =>
+        typeof url === "string" &&
+        url.startsWith(`${MITRE10_BASE}/`)
+    );
+
+  return [...new Set(urls)].slice(0, 10);
+}
 export async function searchMitre10({
   query,
   location,
-  productUrls = [],
 }) {
   if (!query) return [];
 
   /*
-   * NEXT STAGE:
+   * Serper is used ONLY to discover genuine
+   * mitre10.com.au product URLs.
    *
-   * Gemini/product discovery will provide genuine
-   * mitre10.com.au product URLs here.
-   *
-   * This function then independently verifies each
-   * actual product page.
-   *
-   * Gemini NEVER supplies the price.
+   * Search snippets and Google prices are NEVER
+   * accepted as supplier pricing.
    */
 
-  const urls = Array.isArray(productUrls)
-    ? productUrls
-        .filter(
-          (url) =>
-            typeof url === "string" &&
-            url.startsWith(`${MITRE10_BASE}/`)
-        )
-        .slice(0, 10)
-    : [];
+  const urls = await discoverMitre10Urls(query);
 
   if (!urls.length) {
     return [];
@@ -215,14 +247,17 @@ export async function searchMitre10({
     .filter(
       (result) =>
         result.status === "fulfilled" &&
-        result.value
+        result.value &&
+        result.value.product &&
+        result.value.sku
     )
     .map((result) => result.value);
 
   console.log("Mitre 10 verified products:", {
     query,
     location,
-    products: products.length,
+    discoveredUrls: urls.length,
+    verifiedProducts: products.length,
   });
 
   return normalizeSupplierResults(products);
