@@ -118,7 +118,7 @@ async function verifyMitre10Product(url) {
 
   console.log("Mitre 10 fetching product page:", url);
 
-  const response = await fetch(url, {{
+  const response = await fetch(url, {
     headers: {
       Accept: "text/html",
       "User-Agent":
