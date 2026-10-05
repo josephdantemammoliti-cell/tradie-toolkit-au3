@@ -93,14 +93,32 @@ function extractBrand(product) {
 }
 
 async function verifyMitre10Product(url) {
-  if (
-    !url ||
-    !url.startsWith(`${MITRE10_BASE}/`)
-  ) {
+  if (!url) return null;
+
+  let parsedUrl;
+
+  try {
+    parsedUrl = new URL(url);
+  } catch {
+    console.log("Mitre 10 rejected invalid URL:", url);
     return null;
   }
 
-  const response = await fetch(url, {
+  const hostname = parsedUrl.hostname
+    .toLowerCase()
+    .replace(/^www\./, "");
+
+  if (hostname !== "mitre10.com.au") {
+    console.log("Mitre 10 rejected hostname:", {
+      url,
+      hostname,
+    });
+    return null;
+  }
+
+  console.log("Mitre 10 fetching product page:", url);
+
+  const response = await fetch(url, {{
     headers: {
       Accept: "text/html",
       "User-Agent":
@@ -221,11 +239,19 @@ async function discoverMitre10Urls(query) {
 
   const urls = (data?.organic || [])
     .map((result) => result?.link)
-    .filter(
-      (url) =>
-        typeof url === "string" &&
-        url.startsWith(`${MITRE10_BASE}/`)
-    );
+    .filter((url) => {
+  if (typeof url !== "string") return false;
+
+  try {
+    const hostname = new URL(url).hostname
+      .toLowerCase()
+      .replace(/^www\./, "");
+
+    return hostname === "mitre10.com.au";
+  } catch {
+    return false;
+  }
+});
 
   return [...new Set(urls)].slice(0, 10);
 }
